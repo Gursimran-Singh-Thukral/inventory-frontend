@@ -4,7 +4,7 @@ import axios from 'axios';
 const InventoryContext = createContext();
 
 // THE API URL (Your Backend Address)
-const API_URL = "https://inventory-management-system-i7af.onrender.com";
+const API_URL = "https://inventory-management-system-i7af.onrender.com/api";
 
 export const InventoryProvider = ({ children }) => {
   const [inventory, setInventory] = useState([]);

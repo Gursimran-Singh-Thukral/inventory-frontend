@@ -21,7 +21,7 @@ const Login = () => {
 
     try {
       // 1. Call the Backend API
-      const res = await axios.post('http://localhost:5000/api/login', formData);
+      const res = await axios.post('https://inventory-management-system-i7af.onrender.com/api/login', formData);
       
       // 2. If successful, save role and redirect
       if (res.data) {
