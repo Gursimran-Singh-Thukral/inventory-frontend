@@ -1,23 +1,26 @@
 import React, { useState } from 'react';
-import { Search, Download, Plus, X, Package, Pencil, Trash2 } from 'lucide-react'; // Removed Sun/Moon
+import { Search, Download, Plus, X, Package, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import XLSX from 'xlsx-js-style';
 import { useInventory } from '../context/InventoryContext';
 
 const UNIT_OPTIONS = ["pcs", "nos", "set", "kg", "g", "can", "mtr", "feet", "roll", "pkt", "ltr", "box"];
 
-// ACCEPT PROP HERE
 const Items = ({ isDarkMode }) => {
   const { inventory, addItem, updateItem, deleteItem } = useInventory();
   const userRole = localStorage.getItem('userRole'); 
 
+  // UI States
   const [searchTerm, setSearchTerm] = useState("");
-  // REMOVED LOCAL DARK MODE STATE
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  
+  // Custom Delete Modal State
+  const [deleteId, setDeleteId] = useState(null); 
+
+  // Form State
   const [newItem, setNewItem] = useState({ name: "", unit: "pcs", altUnit: "", factor: "", alertQty: "" });
 
-  // REMOVED TOGGLE THEME FUNCTION (It's in Sidebar now)
-
+  // --- HANDLERS ---
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === "altUnit" && value === "") {
@@ -45,8 +48,11 @@ const Items = ({ isDarkMode }) => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm("Delete this item?")) deleteItem(id);
+  const confirmDelete = () => {
+    if (deleteId) {
+      deleteItem(deleteId);
+      setDeleteId(null); // Close modal
+    }
   };
 
   const handleSaveItem = (e) => {
@@ -68,6 +74,7 @@ const Items = ({ isDarkMode }) => {
     setIsModalOpen(false);
   };
 
+  // --- FILTER & EXPORT ---
   const filteredItems = inventory.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleExport = () => {
@@ -87,7 +94,7 @@ const Items = ({ isDarkMode }) => {
   return (
     <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
       
-      {/* Header - Button Removed */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Items Master</h1>
@@ -95,23 +102,17 @@ const Items = ({ isDarkMode }) => {
         </div>
       </div>
 
+      {/* Toolbar */}
       <div className={`p-4 rounded-t-xl flex flex-col md:flex-row gap-4 justify-between items-center border-b ${isDarkMode ? 'bg-darkcard border-gray-700' : 'bg-white border-gray-200'}`}>
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-3 text-gray-400 h-5 w-5" />
-          <input 
-            type="text" 
-            placeholder="Search items..." 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
-            className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} 
-          />
+          <input type="text" placeholder="Search items..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} />
         </div>
         
         <div className="flex gap-3 w-full md:w-auto justify-end">
           <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow-md transition-all text-sm md:text-base">
             <Download size={18} /> <span className="hidden md:inline">Export</span>
           </button>
-          
           {userRole === 'admin' && (
             <button onClick={openAddModal} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md transition-all text-sm md:text-base">
               <Plus size={18} /> <span className="hidden md:inline">Add Item</span><span className="md:hidden">Add</span>
@@ -120,6 +121,7 @@ const Items = ({ isDarkMode }) => {
         </div>
       </div>
 
+      {/* Table */}
       <div className={`overflow-x-auto rounded-b-xl shadow-sm border border-t-0 ${isDarkMode ? 'bg-darkcard border-gray-700' : 'bg-white border-gray-200'}`}>
         <table className="w-full text-left border-collapse min-w-[800px]">
           <thead>
@@ -143,7 +145,7 @@ const Items = ({ isDarkMode }) => {
                   <td className="p-4">
                     <div className="flex gap-2">
                       <button onClick={() => openEditModal(item)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"><Pencil size={18} /></button>
-                      <button onClick={() => handleDelete(item.id)} className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition-colors"><Trash2 size={18} /></button>
+                      <button onClick={() => setDeleteId(item.id)} className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition-colors"><Trash2 size={18} /></button>
                     </div>
                   </td>
                 )}
@@ -153,6 +155,7 @@ const Items = ({ isDarkMode }) => {
         </table>
       </div>
 
+      {/* Add/Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className={`w-[95%] md:w-full md:max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
@@ -163,38 +166,16 @@ const Items = ({ isDarkMode }) => {
             
             <div className="overflow-y-auto p-6">
               <form onSubmit={handleSaveItem} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Item Name *</label>
-                  <input required name="name" value={newItem.name} onChange={handleChange} type="text" className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Copper Pipe 1/2 inch" />
-                </div>
+                <div><label className="block text-sm font-medium mb-1">Item Name *</label><input required name="name" value={newItem.name} onChange={handleChange} type="text" className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Copper Pipe 1/2 inch" /></div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Primary Unit *</label>
-                    <select required name="unit" value={newItem.unit} onChange={handleChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500">
-                      {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Alt Unit (Optional)</label>
-                    <select name="altUnit" value={newItem.altUnit} onChange={handleChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500">
-                      <option value="">None</option>
-                      {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
+                  <div><label className="block text-sm font-medium mb-1">Primary Unit *</label><select required name="unit" value={newItem.unit} onChange={handleChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500">{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+                  <div><label className="block text-sm font-medium mb-1">Alt Unit (Optional)</label><select name="altUnit" value={newItem.altUnit} onChange={handleChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"><option value="">None</option>{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-sm font-medium mb-1 ${!newItem.altUnit ? "opacity-50" : ""}`}>Conversion Factor</label>
-                    <input name="factor" value={newItem.factor} onChange={handleChange} type="number" disabled={!newItem.altUnit} className={`w-full p-3 rounded-lg border dark:border-gray-700 outline-none transition-colors ${!newItem.altUnit ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-50" : "dark:bg-gray-800 focus:ring-2 focus:ring-blue-500"}`} placeholder={!newItem.altUnit ? "Enter Alt Unit first" : "Leave blank for Manual"} />
-                    <p className="text-xs opacity-60 mt-1">1 Primary = ? Alt</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Alert Quantity *</label>
-                    <input required name="alertQty" value={newItem.alertQty} onChange={handleChange} type="number" className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Min stock level" />
-                  </div>
+                  <div><label className={`block text-sm font-medium mb-1 ${!newItem.altUnit ? "opacity-50" : ""}`}>Conversion Factor</label><input name="factor" value={newItem.factor} onChange={handleChange} type="number" disabled={!newItem.altUnit} className={`w-full p-3 rounded-lg border dark:border-gray-700 outline-none transition-colors ${!newItem.altUnit ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-50" : "dark:bg-gray-800 focus:ring-2 focus:ring-blue-500"}`} placeholder={!newItem.altUnit ? "Enter Alt Unit first" : "Leave blank for Manual"} /><p className="text-xs opacity-60 mt-1">1 Primary = ? Alt</p></div>
+                  <div><label className="block text-sm font-medium mb-1">Alert Quantity *</label><input required name="alertQty" value={newItem.alertQty} onChange={handleChange} type="number" className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Min stock level" /></div>
                 </div>
 
                 <div className="pt-4 flex gap-3">
@@ -202,6 +183,25 @@ const Items = ({ isDarkMode }) => {
                   <button type="submit" className="flex-1 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg transition-all">{editingId ? "Update Item" : "Save Item"}</button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className={`w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center transform transition-all scale-100 ${isDarkMode ? 'bg-gray-900 text-white border border-gray-700' : 'bg-white text-gray-800'}`}>
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-bold mb-2">Delete Item & History?</h3>
+            <p className={`text-sm mb-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              This will permanently remove the item <b>AND delete all its transaction history</b>. This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteId(null)} className={`flex-1 py-2.5 rounded-lg border font-medium transition-colors ${isDarkMode ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-50'}`}>Cancel</button>
+              <button onClick={confirmDelete} className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold shadow-md transition-colors">Delete Everything</button>
             </div>
           </div>
         </div>
