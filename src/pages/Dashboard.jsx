@@ -34,12 +34,20 @@ const Dashboard = ({ isDarkMode }) => {
       { v: "Alt qty left", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }, 
       { v: "Status", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }
     ];
-    const rows = processedData.map(item => [
-      { v: item.name, s: { alignment: { horizontal: "center" } } },
-      { v: `${item.quantity} ${item.unit}`, s: { alignment: { horizontal: "center" } } },
-      { v: `${item.altQuantity} ${item.altUnit || ''}`, s: { alignment: { horizontal: "center" } } }, 
-      { v: item.quantity <= item.alertQty ? "LOW" : "OK", s: { font: { color: { rgb: item.quantity <= item.alertQty ? "DC2626" : "166534" }, bold: true }, alignment: { horizontal: "center" } } }
-    ]);
+    const rows = processedData.map(item => {
+      // Formatting for Excel
+      const altVal = parseFloat(item.altQuantity || 0);
+      const altText = (altVal !== 0 || item.altUnit) 
+        ? `${Number(altVal).toFixed(2).replace(/\.00$/, '')} ${item.altUnit || ''}` 
+        : '-';
+
+      return [
+        { v: item.name, s: { alignment: { horizontal: "center" } } },
+        { v: `${item.quantity} ${item.unit}`, s: { alignment: { horizontal: "center" } } },
+        { v: altText, s: { alignment: { horizontal: "center" } } }, 
+        { v: item.quantity <= item.alertQty ? "LOW" : "OK", s: { font: { color: { rgb: item.quantity <= item.alertQty ? "DC2626" : "166534" }, bold: true }, alignment: { horizontal: "center" } } }
+      ];
+    });
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     worksheet['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
     XLSX.utils.book_append_sheet(workbook, worksheet, "Dashboard_Report");
@@ -78,17 +86,27 @@ const Dashboard = ({ isDarkMode }) => {
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {processedData.map((item) => {
                 const isLow = item.quantity <= item.alertQty;
-                // LOGIC: Show "-" only if Qty is "0" AND no Alt Unit is defined. Otherwise show the number.
-                const showAlt = item.altQuantity !== "0" || item.altUnit; 
                 
+                // NEW DISPLAY LOGIC:
+                // 1. Get raw number from server (e.g. 50.5 or 0)
+                const rawAlt = parseFloat(item.altQuantity || 0);
+                
+                // 2. Format: Remove unnecessary .00
+                const formattedAlt = Number(rawAlt).toFixed(2).replace(/\.00$/, '');
+
+                // 3. Decide to show: Show if value exists (even if 0, if user wants to see unit) OR if value is > 0
+                // Use a dash ONLY if 0 AND no unit is defined
+                const showAlt = rawAlt !== 0 || (item.altUnit && item.altUnit !== '-');
+
                 return (
                   <tr key={item.id} className={`hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
                     
+                    {/* UPDATED ALT QTY COLUMN */}
                     <td className="p-4 text-center font-mono opacity-80">
                       {showAlt ? (
-                        <span>{item.altQuantity} <span className="text-xs opacity-60">{item.altUnit}</span></span>
+                        <span>{formattedAlt} <span className="text-xs opacity-60">{item.altUnit}</span></span>
                       ) : (
                         <span className="opacity-30">-</span>
                       )}
