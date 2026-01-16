@@ -3,15 +3,16 @@ import axios from 'axios';
 
 const InventoryContext = createContext();
 
-// Ensure this matches your Render URL exactly
+// ⚠️ CHECK THIS: If testing on laptop, use localhost. If deployed, use Render URL.
 const API_URL = "https://inventory-api-gursimran.onrender.com/api"; 
+// const API_URL = "http://localhost:5000/api"; 
 
 export const InventoryProvider = ({ children }) => {
   const [inventory, setInventory] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // FETCH DATA
+  // --- FETCH DATA (The Truth Source) ---
   const fetchData = async () => {
     try {
       const [itemsRes, txnRes] = await Promise.all([
@@ -22,84 +23,65 @@ export const InventoryProvider = ({ children }) => {
       setTransactions(txnRes.data);
       setLoading(false);
     } catch (error) {
-      console.error("Error syncing data:", error);
+      console.error("Error fetching data:", error);
     }
   };
 
-  // AUTO-SYNC (Every 2 Seconds)
+  // Poll every 2 seconds to keep devices in sync
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  // --- ACTIONS ---
+  // --- ACTIONS (Async/Await guarantees DB update) ---
 
   const addItem = async (item) => {
     try {
+      // 1. Send to Server
       const res = await axios.post(`${API_URL}/items`, item);
-      setInventory([...inventory, res.data]);
-    } catch (err) { console.error(err); }
+      // 2. Only update UI if Server succeeds
+      setInventory(prev => [...prev, res.data]);
+      return res.data; // Return data so Quick Add knows it's done
+    } catch (err) { 
+      console.error("Add Item Failed:", err); 
+      alert("Failed to save item. Check connection.");
+    }
   };
 
   const updateItem = async (updatedItem) => {
     try {
-      // 1. Optimistic Update (Update Name in UI immediately)
-      const oldItem = inventory.find(i => i.id === updatedItem.id);
-      setInventory(inventory.map(i => i.id === updatedItem.id ? updatedItem : i));
-      
-      // Update local transactions immediately too
-      if (oldItem && oldItem.name !== updatedItem.name) {
-        setTransactions(prev => prev.map(t => 
-          t.itemName === oldItem.name ? { ...t, itemName: updatedItem.name } : t
-        ));
-      }
-
-      // 2. API Call
       await axios.put(`${API_URL}/items/${updatedItem.id}`, updatedItem);
-      fetchData(); // Sync with server to be sure
+      fetchData(); // Force refresh to catch any side effects (renaming, etc)
     } catch (err) { console.error(err); }
   };
 
   const deleteItem = async (id) => {
     try {
-      // 1. Find the name of the item being deleted
-      const itemToDelete = inventory.find(i => i.id === id);
-      
-      // 2. Local Cleanup (Instant UI update)
-      setInventory(inventory.filter(i => i.id !== id));
-      if (itemToDelete) {
-        setTransactions(transactions.filter(t => t.itemName !== itemToDelete.name));
-      }
-
-      // 3. API Call (Server Cleanup)
       await axios.delete(`${API_URL}/items/${id}`);
-      
-      // 4. Force Fetch (Ensure server matches local)
-      fetchData(); 
+      fetchData(); // Force refresh to remove cascading transactions
     } catch (err) { console.error(err); }
   };
 
   const addTransaction = async (txn) => {
     try {
       const res = await axios.post(`${API_URL}/transactions`, txn);
-      setTransactions([res.data, ...transactions]);
-      fetchData(); 
+      setTransactions(prev => [res.data, ...prev]);
+      fetchData(); // Refresh inventory quantities immediately
     } catch (err) { console.error(err); }
   };
 
   const updateTransaction = async (updatedTxn) => {
     try {
       await axios.put(`${API_URL}/transactions/${updatedTxn.id}`, updatedTxn);
-      fetchData(); 
+      fetchData();
     } catch (err) { console.error(err); }
   };
 
   const deleteTransaction = async (id) => {
     try {
       await axios.delete(`${API_URL}/transactions/${id}`);
-      setTransactions(transactions.filter(t => t.id !== id));
-      fetchData(); 
+      fetchData();
     } catch (err) { console.error(err); }
   };
 

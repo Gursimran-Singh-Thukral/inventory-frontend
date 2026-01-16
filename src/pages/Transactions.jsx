@@ -48,7 +48,6 @@ const Transactions = ({ isDarkMode }) => {
     }
   };
 
-  // Auto-Calculate Alt Qty Logic
   useEffect(() => {
     const item = inventory.find(i => i.name === formData.itemName);
     if (item && formData.quantity && item.factor && item.factor !== "Manual" && item.factor !== "-") {
@@ -70,7 +69,8 @@ const Transactions = ({ isDarkMode }) => {
     else setNewItem(prev => ({ ...prev, [name]: value }));
   };
 
-  const saveQuickItem = (e) => {
+  // --- FIXED: INDEPENDENT ITEM SAVE ---
+  const saveQuickItem = async (e) => {
     e.preventDefault();
     const itemData = {
       name: newItem.name,
@@ -79,9 +79,18 @@ const Transactions = ({ isDarkMode }) => {
       factor: newItem.altUnit ? (newItem.factor || "Manual") : "-", 
       alertQty: parseInt(newItem.alertQty) || 0
     };
-    addItem(itemData);
+    
+    // 1. Wait for database confirmation
+    await addItem(itemData);
+    
+    // 2. Auto-fill the transaction form with the new data
     setFormData(prev => ({ ...prev, itemName: itemData.name, unit: itemData.unit, altUnit: itemData.altUnit }));
+    
+    // 3. Close ONLY the quick add modal
     setIsQuickAddOpen(false);
+    
+    // NOTE: The main Transaction modal remains open. 
+    // If the user clicks "Cancel" there, the item is STILL SAVED because 'addItem' finished above.
   };
 
   const openAddModal = () => {
@@ -207,7 +216,6 @@ const Transactions = ({ isDarkMode }) => {
                   <datalist id="items">{inventory.map(item => <option key={item.id} value={item.name} />)}</datalist>
                 </div>
 
-                {/* --- FIXED: ROW WITH BOTH QTY BOXES --- */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Primary Qty {formData.unit && <span className="text-blue-500 font-bold">({formData.unit})</span>}</label>
@@ -219,7 +227,6 @@ const Transactions = ({ isDarkMode }) => {
                   </div>
                 </div>
 
-                {/* --- FIXED: RATE BELOW --- */}
                 {formData.type === "IN" && (
                   <div>
                     <label className="block text-sm font-medium mb-1">Purchase Rate (₹)</label>
