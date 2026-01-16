@@ -16,6 +16,8 @@ const Transactions = ({ isDarkMode }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  
+  // Quick Add States
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickItemName, setQuickItemName] = useState("");
   const [newItem, setNewItem] = useState({ name: "", unit: "pcs", altUnit: "", factor: "", alertQty: "" });
@@ -63,13 +65,13 @@ const Transactions = ({ isDarkMode }) => {
   }, [formData.quantity, formData.itemName, inventory]);
 
   const handleQtyChange = (e) => setFormData(prev => ({ ...prev, quantity: e.target.value }));
+  
   const handleQuickAddChange = (e) => {
     const { name, value } = e.target;
     if (name === "altUnit" && value === "") setNewItem(prev => ({ ...prev, altUnit: "", factor: "" }));
     else setNewItem(prev => ({ ...prev, [name]: value }));
   };
 
-  // --- FIXED: INDEPENDENT ITEM SAVE ---
   const saveQuickItem = async (e) => {
     e.preventDefault();
     const itemData = {
@@ -79,18 +81,9 @@ const Transactions = ({ isDarkMode }) => {
       factor: newItem.altUnit ? (newItem.factor || "Manual") : "-", 
       alertQty: parseInt(newItem.alertQty) || 0
     };
-    
-    // 1. Wait for database confirmation
     await addItem(itemData);
-    
-    // 2. Auto-fill the transaction form with the new data
     setFormData(prev => ({ ...prev, itemName: itemData.name, unit: itemData.unit, altUnit: itemData.altUnit }));
-    
-    // 3. Close ONLY the quick add modal
     setIsQuickAddOpen(false);
-    
-    // NOTE: The main Transaction modal remains open. 
-    // If the user clicks "Cancel" there, the item is STILL SAVED because 'addItem' finished above.
   };
 
   const openAddModal = () => {
@@ -105,16 +98,23 @@ const Transactions = ({ isDarkMode }) => {
     setIsModalOpen(true);
   };
 
-  const confirmDelete = () => { if (deleteId) { deleteTransaction(deleteId); setDeleteId(null); } };
+  // --- FIXED DELETE HANDLER ---
+  const confirmDelete = async () => {
+    if (deleteId) {
+      await deleteTransaction(deleteId); // Wait for server to finish
+      setDeleteId(null); // Close modal only after success
+    }
+  };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     const payload = { ...formData, date: formData.date.toISOString().split('T')[0] };
-    if (editingId) updateTransaction({ ...payload, id: editingId });
-    else addTransaction(payload);
+    if (editingId) await updateTransaction({ ...payload, id: editingId });
+    else await addTransaction(payload);
     setIsModalOpen(false);
   };
 
+  // --- FILTER & EXPORT ---
   const filteredTransactions = transactions.filter(txn => {
     const matchesSearch = txn.itemName.toLowerCase().includes(searchTerm.toLowerCase()) || txn.remarks.toLowerCase().includes(searchTerm.toLowerCase());
     let matchesDate = true;
@@ -262,6 +262,18 @@ const Transactions = ({ isDarkMode }) => {
                 <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsQuickAddOpen(false)} className="flex-1 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium">Cancel</button><button type="submit" className="flex-1 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg">Create</button></div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* FIXED DELETE MODAL: Uses confirmDelete with async/await */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className={`w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center transform transition-all scale-100 ${isDarkMode ? 'bg-gray-900 text-white border border-gray-700' : 'bg-white text-gray-800'}`}>
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4"><AlertTriangle className="h-6 w-6 text-red-600" /></div>
+            <h3 className="text-lg font-bold mb-2">Delete Transaction?</h3>
+            <p className={`text-sm mb-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Are you sure? Stock levels will remain unchanged.</p>
+            <div className="flex gap-3"><button onClick={() => setDeleteId(null)} className={`flex-1 py-2.5 rounded-lg border font-medium transition-colors ${isDarkMode ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-50'}`}>Cancel</button><button onClick={confirmDelete} className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold shadow-md transition-colors">Delete</button></div>
           </div>
         </div>
       )}
