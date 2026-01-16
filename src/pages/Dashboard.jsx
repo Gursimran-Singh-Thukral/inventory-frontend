@@ -37,7 +37,7 @@ const Dashboard = ({ isDarkMode }) => {
     const rows = processedData.map(item => [
       { v: item.name, s: { alignment: { horizontal: "center" } } },
       { v: `${item.quantity} ${item.unit}`, s: { alignment: { horizontal: "center" } } },
-      { v: (item.altQuantity !== undefined && item.altQuantity !== '-') ? `${item.altQuantity} ${item.altUnit}` : '-', s: { alignment: { horizontal: "center" } } }, 
+      { v: `${item.altQuantity} ${item.altUnit || ''}`, s: { alignment: { horizontal: "center" } } }, 
       { v: item.quantity <= item.alertQty ? "LOW" : "OK", s: { font: { color: { rgb: item.quantity <= item.alertQty ? "DC2626" : "166534" }, bold: true }, alignment: { horizontal: "center" } } }
     ]);
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -78,14 +78,16 @@ const Dashboard = ({ isDarkMode }) => {
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {processedData.map((item) => {
                 const isLow = item.quantity <= item.alertQty;
+                // LOGIC: Show "-" only if Qty is "0" AND no Alt Unit is defined. Otherwise show the number.
+                const showAlt = item.altQuantity !== "0" || item.altUnit; 
+                
                 return (
                   <tr key={item.id} className={`hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
                     
-                    {/* FIXED: Check if undefined before showing */}
                     <td className="p-4 text-center font-mono opacity-80">
-                      {(item.altQuantity !== undefined && item.altQuantity !== '-') ? (
+                      {showAlt ? (
                         <span>{item.altQuantity} <span className="text-xs opacity-60">{item.altUnit}</span></span>
                       ) : (
                         <span className="opacity-30">-</span>
