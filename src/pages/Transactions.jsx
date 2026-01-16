@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Plus, X, ClipboardList, Pencil, Trash2, Calendar as CalendarIcon, AlertTriangle, Package } from 'lucide-react';
+import { Search, Download, Plus, X, ClipboardList, Pencil, Trash2, Calendar as CalendarIcon, Package, AlertTriangle } from 'lucide-react';
 import XLSX from 'xlsx-js-style';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -57,6 +57,7 @@ const Transactions = ({ isDarkMode }) => {
         if (!isNaN(factor)) {
             const calculatedAlt = (parseFloat(formData.quantity) * factor).toFixed(2);
             setFormData(prev => {
+                // Only update if value actually changed to avoid loop
                 if (prev.altQty !== calculatedAlt) return { ...prev, altQty: calculatedAlt };
                 return prev;
             });
@@ -75,7 +76,7 @@ const Transactions = ({ isDarkMode }) => {
   const saveQuickItem = async (e) => {
     e.preventDefault();
     const itemData = {
-      name: newItem.name.trim(), // Trim spaces
+      name: newItem.name.trim(),
       unit: newItem.unit,
       altUnit: newItem.altUnit || "-", 
       factor: newItem.altUnit ? (newItem.factor || "Manual") : "-", 
@@ -105,16 +106,21 @@ const Transactions = ({ isDarkMode }) => {
     }
   };
 
-  // --- FIXED SAVE HANDLER (Sanitizes Data) ---
+  // --- STRICT SAVE HANDLER (Enforces Numbers) ---
   const handleSave = async (e) => {
     e.preventDefault();
     
+    // Parse inputs to Numbers immediately. invalid becomes 0.
+    const cleanQty = parseFloat(formData.quantity) || 0;
+    const cleanAltQty = parseFloat(formData.altQty) || 0; 
+    const cleanRate = parseFloat(formData.rate) || 0;
+
     const payload = { 
         ...formData, 
-        itemName: formData.itemName.trim(), // Remove extra spaces
-        quantity: parseFloat(formData.quantity) || 0, // Force Number
-        altQty: parseFloat(formData.altQty) || 0,     // Force Number (Calculated value saved here)
-        rate: parseFloat(formData.rate) || 0,
+        itemName: formData.itemName.trim(), 
+        quantity: cleanQty, 
+        altQty: cleanAltQty, // Sending strictly as Number
+        rate: cleanRate,
         date: formData.date.toISOString().split('T')[0] 
     };
 
@@ -123,7 +129,6 @@ const Transactions = ({ isDarkMode }) => {
     setIsModalOpen(false);
   };
 
-  // --- FILTER & EXPORT ---
   const filteredTransactions = transactions.filter(txn => {
     const matchesSearch = txn.itemName.toLowerCase().includes(searchTerm.toLowerCase()) || txn.remarks.toLowerCase().includes(searchTerm.toLowerCase());
     let matchesDate = true;
