@@ -30,7 +30,8 @@ const Dashboard = ({ isDarkMode }) => {
       { v: "Status", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }
     ];
     const rows = processedData.map(item => {
-      const altVal = Number(item.altQuantity) || 0;
+      // Logic: Just use the number the server sent us
+      const altVal = parseFloat(item.altQuantity) || 0;
       const altText = (altVal !== 0 || item.altUnit) ? `${altVal.toFixed(2).replace(/\.00$/, '')} ${item.altUnit || ''}` : '-';
       
       return [
@@ -81,11 +82,12 @@ const Dashboard = ({ isDarkMode }) => {
               {processedData.map((item) => {
                 const isLow = item.quantity <= item.alertQty;
                 
-                // --- SIMPLE & ROBUST DISPLAY LOGIC ---
-                const altVal = Number(item.altQuantity) || 0;
-                let display = "-";
+                // --- SIMPLE DISPLAY LOGIC ---
+                // We use parseFloat to catch any remaining string numbers
+                const altVal = parseFloat(item.altQuantity) || 0;
                 
-                // Show Number if > 0 OR if the unit is defined (e.g. "0 box")
+                let display = "-";
+                // Show Number if > 0 OR if the unit is defined
                 if (altVal !== 0 || (item.altUnit && item.altUnit !== '-')) {
                     display = `${altVal.toFixed(2).replace(/\.00$/, '')} <span class="text-xs opacity-60">${item.altUnit || ''}</span>`;
                 }
@@ -95,7 +97,6 @@ const Dashboard = ({ isDarkMode }) => {
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
                     
-                    {/* Render HTML safely for the small unit text */}
                     <td className="p-4 text-center font-mono opacity-80">
                       {display !== '-' ? (<span dangerouslySetInnerHTML={{ __html: display }}></span>) : (<span className="opacity-30">-</span>)}
                     </td>
