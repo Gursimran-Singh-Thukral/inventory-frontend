@@ -35,10 +35,11 @@ const Dashboard = ({ isDarkMode }) => {
       { v: "Status", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }
     ];
     const rows = processedData.map(item => {
-      // Formatting for Excel
-      const altVal = parseFloat(item.altQuantity || 0);
+      let altVal = parseFloat(item.altQuantity);
+      if (isNaN(altVal)) altVal = 0; // Safety Check
+      
       const altText = (altVal !== 0 || item.altUnit) 
-        ? `${Number(altVal).toFixed(2).replace(/\.00$/, '')} ${item.altUnit || ''}` 
+        ? `${altVal.toFixed(2).replace(/\.00$/, '')} ${item.altUnit || ''}` 
         : '-';
 
       return [
@@ -87,23 +88,21 @@ const Dashboard = ({ isDarkMode }) => {
               {processedData.map((item) => {
                 const isLow = item.quantity <= item.alertQty;
                 
-                // NEW DISPLAY LOGIC:
-                // 1. Get raw number from server (e.g. 50.5 or 0)
-                const rawAlt = parseFloat(item.altQuantity || 0);
-                
-                // 2. Format: Remove unnecessary .00
-                const formattedAlt = Number(rawAlt).toFixed(2).replace(/\.00$/, '');
+                // --- FIXED DISPLAY LOGIC (NaN-Proof) ---
+                let altVal = parseFloat(item.altQuantity);
+                if (isNaN(altVal)) altVal = 0; // Force 0 if corrupted
 
-                // 3. Decide to show: Show if value exists (even if 0, if user wants to see unit) OR if value is > 0
-                // Use a dash ONLY if 0 AND no unit is defined
-                const showAlt = rawAlt !== 0 || (item.altUnit && item.altUnit !== '-');
+                const formattedAlt = altVal.toFixed(2).replace(/\.00$/, ''); // "50.00" -> "50"
+                
+                // Show Dash ONLY if value is 0 AND there is no unit defined
+                const showAlt = altVal !== 0 || (item.altUnit && item.altUnit !== '-');
 
                 return (
                   <tr key={item.id} className={`hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
                     
-                    {/* UPDATED ALT QTY COLUMN */}
+                    {/* Alt Qty Column */}
                     <td className="p-4 text-center font-mono opacity-80">
                       {showAlt ? (
                         <span>{formattedAlt} <span className="text-xs opacity-60">{item.altUnit}</span></span>
