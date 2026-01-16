@@ -3,21 +3,20 @@ import axios from 'axios';
 
 const InventoryContext = createContext();
 
-// ⚠️ CHECK THIS: If testing on laptop, use localhost. If deployed, use Render URL.
+// ⚠️ FIXED URL: Added "/api" at the end
 const API_URL = "https://inventory-management-system-i7af.onrender.com/api"; 
-// const API_URL = "http://localhost:5000/api"; 
 
 export const InventoryProvider = ({ children }) => {
   const [inventory, setInventory] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // --- FETCH DATA (The Truth Source) ---
+  // --- FETCH DATA ---
   const fetchData = async () => {
     try {
       const [itemsRes, txnRes] = await Promise.all([
-        axios.get(`${API_URL}/items`),
-        axios.get(`${API_URL}/transactions`)
+        axios.get(`${API_URL}/items`),        // Becomes .../api/items
+        axios.get(`${API_URL}/transactions`)  // Becomes .../api/transactions
       ]);
       setInventory(itemsRes.data);
       setTransactions(txnRes.data);
@@ -27,22 +26,20 @@ export const InventoryProvider = ({ children }) => {
     }
   };
 
-  // Poll every 2 seconds to keep devices in sync
+  // Poll every 2 seconds
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  // --- ACTIONS (Async/Await guarantees DB update) ---
+  // --- ACTIONS ---
 
   const addItem = async (item) => {
     try {
-      // 1. Send to Server
       const res = await axios.post(`${API_URL}/items`, item);
-      // 2. Only update UI if Server succeeds
       setInventory(prev => [...prev, res.data]);
-      return res.data; // Return data so Quick Add knows it's done
+      return res.data; 
     } catch (err) { 
       console.error("Add Item Failed:", err); 
       alert("Failed to save item. Check connection.");
@@ -52,14 +49,14 @@ export const InventoryProvider = ({ children }) => {
   const updateItem = async (updatedItem) => {
     try {
       await axios.put(`${API_URL}/items/${updatedItem.id}`, updatedItem);
-      fetchData(); // Force refresh to catch any side effects (renaming, etc)
+      fetchData(); 
     } catch (err) { console.error(err); }
   };
 
   const deleteItem = async (id) => {
     try {
       await axios.delete(`${API_URL}/items/${id}`);
-      fetchData(); // Force refresh to remove cascading transactions
+      fetchData(); 
     } catch (err) { console.error(err); }
   };
 
@@ -67,7 +64,7 @@ export const InventoryProvider = ({ children }) => {
     try {
       const res = await axios.post(`${API_URL}/transactions`, txn);
       setTransactions(prev => [res.data, ...prev]);
-      fetchData(); // Refresh inventory quantities immediately
+      fetchData(); 
     } catch (err) { console.error(err); }
   };
 
