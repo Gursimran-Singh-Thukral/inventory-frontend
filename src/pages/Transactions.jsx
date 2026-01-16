@@ -16,8 +16,6 @@ const Transactions = ({ isDarkMode }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
-
-  // Quick Add State
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickItemName, setQuickItemName] = useState("");
   const [newItem, setNewItem] = useState({ name: "", unit: "pcs", altUnit: "", factor: "", alertQty: "" });
@@ -30,42 +28,17 @@ const Transactions = ({ isDarkMode }) => {
     itemName: "", type: "IN", quantity: "", altQty: "", remarks: "", unit: "", altUnit: "", rate: ""
   });
 
-  // --- 1. FIXED INPUT HANDLING (Separated Typing from Logic) ---
+  // --- HANDLERS ---
   const handleNameChange = (e) => {
-    // Just update the text immediately so typing never freezes
     const val = e.target.value;
     setFormData(prev => ({ ...prev, itemName: val }));
-
-    // Check for match
     const item = inventory.find(i => i.name === val);
     if (item) {
-        setFormData(prev => ({ 
-            ...prev, 
-            itemName: val,
-            unit: item.unit,
-            altUnit: item.altUnit 
-        }));
+        setFormData(prev => ({ ...prev, itemName: val, unit: item.unit, altUnit: item.altUnit }));
     } else {
-        // If no match, clear units (optional, but keeps data clean)
         setFormData(prev => ({ ...prev, itemName: val, unit: "", altUnit: "" }));
     }
   };
-
-  // --- 2. AUTO-CALCULATE LOGIC (Runs when Qty changes or Item is selected) ---
-  useEffect(() => {
-    const item = inventory.find(i => i.name === formData.itemName);
-    if (item && formData.quantity && item.factor && item.factor !== "Manual" && item.factor !== "-") {
-        const factor = parseFloat(item.factor);
-        if (!isNaN(factor)) {
-            const calculatedAlt = (parseFloat(formData.quantity) * factor).toFixed(2);
-            // Only update if it's different to avoid loops
-            setFormData(prev => {
-                if (prev.altQty !== calculatedAlt) return { ...prev, altQty: calculatedAlt };
-                return prev;
-            });
-        }
-    }
-  }, [formData.quantity, formData.itemName, inventory]);
 
   const checkItemExists = () => {
     if (formData.itemName.trim() !== "" && !inventory.find(i => i.name === formData.itemName)) {
@@ -75,17 +48,26 @@ const Transactions = ({ isDarkMode }) => {
     }
   };
 
-  const handleQtyChange = (e) => {
-    setFormData(prev => ({ ...prev, quantity: e.target.value }));
-  };
+  // Auto-Calculate Alt Qty Logic
+  useEffect(() => {
+    const item = inventory.find(i => i.name === formData.itemName);
+    if (item && formData.quantity && item.factor && item.factor !== "Manual" && item.factor !== "-") {
+        const factor = parseFloat(item.factor);
+        if (!isNaN(factor)) {
+            const calculatedAlt = (parseFloat(formData.quantity) * factor).toFixed(2);
+            setFormData(prev => {
+                if (prev.altQty !== calculatedAlt) return { ...prev, altQty: calculatedAlt };
+                return prev;
+            });
+        }
+    }
+  }, [formData.quantity, formData.itemName, inventory]);
 
+  const handleQtyChange = (e) => setFormData(prev => ({ ...prev, quantity: e.target.value }));
   const handleQuickAddChange = (e) => {
     const { name, value } = e.target;
-    if (name === "altUnit" && value === "") {
-        setNewItem(prev => ({ ...prev, altUnit: "", factor: "" }));
-    } else {
-        setNewItem(prev => ({ ...prev, [name]: value }));
-    }
+    if (name === "altUnit" && value === "") setNewItem(prev => ({ ...prev, altUnit: "", factor: "" }));
+    else setNewItem(prev => ({ ...prev, [name]: value }));
   };
 
   const saveQuickItem = (e) => {
@@ -97,7 +79,6 @@ const Transactions = ({ isDarkMode }) => {
       factor: newItem.altUnit ? (newItem.factor || "Manual") : "-", 
       alertQty: parseInt(newItem.alertQty) || 0
     };
-    
     addItem(itemData);
     setFormData(prev => ({ ...prev, itemName: itemData.name, unit: itemData.unit, altUnit: itemData.altUnit }));
     setIsQuickAddOpen(false);
@@ -115,9 +96,7 @@ const Transactions = ({ isDarkMode }) => {
     setIsModalOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (deleteId) { deleteTransaction(deleteId); setDeleteId(null); }
-  };
+  const confirmDelete = () => { if (deleteId) { deleteTransaction(deleteId); setDeleteId(null); } };
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -172,7 +151,6 @@ const Transactions = ({ isDarkMode }) => {
         <div><h1 className="text-2xl md:text-3xl font-bold">Transactions</h1><p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Track stock movements</p></div>
       </div>
       
-      {/* TOOLBAR */}
       <div className={`p-4 rounded-t-xl flex flex-col md:flex-row flex-wrap gap-4 justify-between items-center border-b ${isDarkMode ? 'bg-darkcard border-gray-700' : 'bg-white border-gray-200'}`}>
         <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto items-stretch md:items-center">
             <div className="relative w-full md:w-64"><Search className="absolute left-3 top-3 text-gray-400 h-5 w-5" /><input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} /></div>
@@ -184,7 +162,6 @@ const Transactions = ({ isDarkMode }) => {
         </div>
       </div>
 
-      {/* TABLE */}
       <div className={`overflow-x-auto rounded-b-xl shadow-sm border border-t-0 ${isDarkMode ? 'bg-darkcard border-gray-700' : 'bg-white border-gray-200'}`}>
         <table className="w-full text-left border-collapse min-w-[800px]">
           <thead>
@@ -210,7 +187,6 @@ const Transactions = ({ isDarkMode }) => {
         </table>
       </div>
 
-      {/* MODALS */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className={`w-[95%] md:w-full md:max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
@@ -225,26 +201,30 @@ const Transactions = ({ isDarkMode }) => {
                   <div><label className="block text-sm font-medium mb-1">Type</label><select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"><option value="IN">Stock IN (Purchase)</option><option value="OUT">Stock OUT (Use)</option></select></div>
                 </div>
                 
-                {/* FIXED ITEM NAME INPUT */}
                 <div>
                   <label className="block text-sm font-medium mb-1">Item Name</label>
                   <input required list="items" value={formData.itemName} onChange={handleNameChange} onBlur={checkItemExists} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type to search or add new..." />
                   <datalist id="items">{inventory.map(item => <option key={item.id} value={item.name} />)}</datalist>
                 </div>
 
+                {/* --- FIXED: ROW WITH BOTH QTY BOXES --- */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><label className="block text-sm font-medium mb-1">Primary Qty {formData.unit && <span className="text-blue-500 font-bold">({formData.unit})</span>}</label><input required type="number" value={formData.quantity} onChange={handleQtyChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" /></div>
-                  
-                  {/* --- FIXED LAYOUT: ALT QTY ALWAYS VISIBLE, RATE ONLY ON IN --- */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Primary Qty {formData.unit && <span className="text-blue-500 font-bold">({formData.unit})</span>}</label>
+                    <input required type="number" value={formData.quantity} onChange={handleQtyChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+                  </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Alt Qty {formData.altUnit && <span className="text-blue-500 font-bold">({formData.altUnit})</span>}</label>
                     <input type="number" value={formData.altQty} onChange={(e) => setFormData({...formData, altQty: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
                   </div>
                 </div>
 
-                {/* SHOW RATE FIELD ONLY FOR IN (Stacked Below) */}
+                {/* --- FIXED: RATE BELOW --- */}
                 {formData.type === "IN" && (
-                    <div><label className="block text-sm font-medium mb-1">Purchase Rate (₹)</label><input type="number" value={formData.rate} onChange={(e) => setFormData({...formData, rate: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Price per unit" /></div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Purchase Rate (₹)</label>
+                    <input type="number" value={formData.rate} onChange={(e) => setFormData({...formData, rate: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Price per unit" />
+                  </div>
                 )}
 
                 <div><label className="block text-sm font-medium mb-1">Remarks</label><textarea value={formData.remarks} onChange={(e) => setFormData({...formData, remarks: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Purchase order #123" rows="2"></textarea></div>

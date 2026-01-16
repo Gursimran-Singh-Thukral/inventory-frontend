@@ -37,7 +37,7 @@ const Dashboard = ({ isDarkMode }) => {
     const rows = processedData.map(item => [
       { v: item.name, s: { alignment: { horizontal: "center" } } },
       { v: `${item.quantity} ${item.unit}`, s: { alignment: { horizontal: "center" } } },
-      { v: item.altQuantity !== '-' ? `${item.altQuantity} ${item.altUnit}` : '-', s: { alignment: { horizontal: "center" } } }, 
+      { v: (item.altQuantity !== undefined && item.altQuantity !== '-') ? `${item.altQuantity} ${item.altUnit}` : '-', s: { alignment: { horizontal: "center" } } }, 
       { v: item.quantity <= item.alertQty ? "LOW" : "OK", s: { font: { color: { rgb: item.quantity <= item.alertQty ? "DC2626" : "166534" }, bold: true }, alignment: { horizontal: "center" } } }
     ]);
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -69,7 +69,6 @@ const Dashboard = ({ isDarkMode }) => {
           <table className="w-full text-left border-collapse min-w-[600px]">
             <thead>
               <tr className={`border-b ${isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-100 bg-gray-50'}`}>
-                {/* 4 COLUMNS AS REQUESTED */}
                 <th className="p-4 text-sm font-bold uppercase tracking-wide">Product Name</th>
                 <th className="p-4 text-sm font-bold uppercase tracking-wide text-center">Primary Qty left</th>
                 <th className="p-4 text-sm font-bold uppercase tracking-wide text-center">Alt qty left</th>
@@ -83,7 +82,16 @@ const Dashboard = ({ isDarkMode }) => {
                   <tr key={item.id} className={`hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
-                    <td className="p-4 text-center font-mono opacity-80">{item.altQuantity !== '-' ? (<span>{item.altQuantity} <span className="text-xs opacity-60">{item.altUnit}</span></span>) : (<span className="opacity-30">-</span>)}</td>
+                    
+                    {/* FIXED: Check if undefined before showing */}
+                    <td className="p-4 text-center font-mono opacity-80">
+                      {(item.altQuantity !== undefined && item.altQuantity !== '-') ? (
+                        <span>{item.altQuantity} <span className="text-xs opacity-60">{item.altUnit}</span></span>
+                      ) : (
+                        <span className="opacity-30">-</span>
+                      )}
+                    </td>
+                    
                     <td className="p-4 text-center"><span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${isLow ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>{isLow ? <AlertCircle size={14} /> : <CheckCircle size={14} />}{isLow ? "Low" : "OK"}</span></td>
                   </tr>
                 );
