@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Search, Download, Plus, X, ClipboardList, Pencil, Trash2, Calendar as CalendarIcon, AlertTriangle } from 'lucide-react';
+import { Search, Download, Plus, X, ClipboardList, Pencil, Trash2, Calendar as CalendarIcon, AlertTriangle, Package } from 'lucide-react';
 import XLSX from 'xlsx-js-style';
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useInventory } from '../context/InventoryContext';
 
 const Transactions = ({ isDarkMode }) => {
-  const { inventory, transactions, addTransaction, updateTransaction, deleteTransaction } = useInventory();
+  const { inventory, transactions, addTransaction, updateTransaction, deleteTransaction, addItem } = useInventory();
   const userRole = localStorage.getItem('userRole');
 
   // UI States
@@ -15,38 +15,60 @@ const Transactions = ({ isDarkMode }) => {
   const [startDate, endDate] = dateRange;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-
-  // Custom Delete Modal State
   const [deleteId, setDeleteId] = useState(null);
+
+  // NEW: State for "Quick Add Item" Modal
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickItemName, setQuickItemName] = useState("");
 
   // Form State
   const [formData, setFormData] = useState({
     date: new Date(), 
-    itemName: "", type: "IN", quantity: "", altQty: "", remarks: "", unit: "", altUnit: ""
+    itemName: "", type: "IN", quantity: "", altQty: "", remarks: "", unit: "", altUnit: "", rate: ""
   });
+
+  // New Item Form State (for the Quick Add Modal)
+  const [newItem, setNewItem] = useState({ name: "", unit: "pcs", altUnit: "", factor: "", alertQty: "" });
+  const UNIT_OPTIONS = ["pcs", "nos", "set", "kg", "g", "can", "mtr", "feet", "roll", "pkt", "ltr", "box"];
 
   // --- HANDLERS ---
   const handleItemSelect = (e) => {
     const selectedName = e.target.value;
     const item = inventory.find(i => i.name === selectedName);
     
-    setFormData(prev => ({ 
-      ...prev, 
-      itemName: selectedName,
-      unit: item ? item.unit : "",
-      altUnit: item ? item.altUnit : ""
-    }));
+    // Check if item exists, if not and user typed something, prepare for Quick Add
+    if (!item && selectedName.length > 1) {
+       // We don't trigger modal immediately to allow typing, but we set state
+       setFormData(prev => ({ ...prev, itemName: selectedName, unit: "", altUnit: "" }));
+       return;
+    }
 
-    if (item && formData.quantity && item.factor && item.factor !== "Manual" && item.factor !== "-") {
-      const factor = parseFloat(item.factor);
-      setFormData(prev => ({ ...prev, altQty: (parseFloat(prev.quantity) * factor).toFixed(2) }));
+    if (item) {
+      setFormData(prev => ({ 
+        ...prev, 
+        itemName: selectedName,
+        unit: item.unit,
+        altUnit: item.altUnit
+      }));
+      if (formData.quantity && item.factor && item.factor !== "Manual" && item.factor !== "-") {
+        const factor = parseFloat(item.factor);
+        setFormData(prev => ({ ...prev, altQty: (parseFloat(prev.quantity) * factor).toFixed(2) }));
+      }
+    }
+  };
+
+  // Trigger Quick Add if item doesn't exist when user leaves the Item Name field
+  const checkItemExists = () => {
+    if (formData.itemName && !inventory.find(i => i.name === formData.itemName)) {
+      setQuickItemName(formData.itemName);
+      setNewItem(prev => ({ ...prev, name: formData.itemName })); // Pre-fill name
+      setIsQuickAddOpen(true);
     }
   };
 
   const handleQtyChange = (e) => {
     const qty = e.target.value;
     setFormData(prev => ({ ...prev, quantity: qty }));
-
     const item = inventory.find(i => i.name === formData.itemName);
     if (item && qty && item.factor && item.factor !== "Manual" && item.factor !== "-") {
       const factor = parseFloat(item.factor);
@@ -54,9 +76,41 @@ const Transactions = ({ isDarkMode }) => {
     }
   };
 
+  const handleQuickAddChange = (e) => {
+    const { name, value } = e.target;
+    if (name === "altUnit" && value === "") {
+        setNewItem(prev => ({ ...prev, altUnit: "", factor: "" }));
+    } else {
+        setNewItem(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const saveQuickItem = (e) => {
+    e.preventDefault();
+    const itemData = {
+      name: newItem.name,
+      unit: newItem.unit,
+      altUnit: newItem.altUnit || "-", 
+      factor: newItem.altUnit ? (newItem.factor || "Manual") : "-", 
+      alertQty: parseInt(newItem.alertQty) || 0
+    };
+    
+    addItem(itemData); // Add to DB
+    
+    // Auto-select this new item in the transaction form
+    setFormData(prev => ({
+        ...prev,
+        itemName: itemData.name,
+        unit: itemData.unit,
+        altUnit: itemData.altUnit
+    }));
+
+    setIsQuickAddOpen(false); // Close modal
+  };
+
   const openAddModal = () => {
     setEditingId(null);
-    setFormData({ date: new Date(), itemName: "", type: "IN", quantity: "", altQty: "", remarks: "", unit: "", altUnit: "" });
+    setFormData({ date: new Date(), itemName: "", type: "IN", quantity: "", altQty: "", remarks: "", unit: "", altUnit: "", rate: "" });
     setIsModalOpen(true);
   };
 
@@ -67,28 +121,19 @@ const Transactions = ({ isDarkMode }) => {
   };
 
   const confirmDelete = () => {
-    if (deleteId) {
-      deleteTransaction(deleteId);
-      setDeleteId(null);
-    }
+    if (deleteId) { deleteTransaction(deleteId); setDeleteId(null); }
   };
 
   const handleSave = (e) => {
     e.preventDefault();
     const payload = { ...formData, date: formData.date.toISOString().split('T')[0] };
-    if (editingId) {
-      updateTransaction({ ...payload, id: editingId });
-    } else {
-      addTransaction(payload);
-    }
+    if (editingId) updateTransaction({ ...payload, id: editingId });
+    else addTransaction(payload);
     setIsModalOpen(false);
   };
 
-  // --- FILTER & EXPORT ---
   const filteredTransactions = transactions.filter(txn => {
-    const matchesSearch = txn.itemName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          txn.remarks.toLowerCase().includes(searchTerm.toLowerCase());
-    
+    const matchesSearch = txn.itemName.toLowerCase().includes(searchTerm.toLowerCase()) || txn.remarks.toLowerCase().includes(searchTerm.toLowerCase());
     let matchesDate = true;
     if (startDate && endDate) {
       const txnDate = new Date(txn.date);
@@ -97,7 +142,6 @@ const Transactions = ({ isDarkMode }) => {
       const end = new Date(endDate); end.setHours(23,59,59,999);
       matchesDate = txnDate >= start && txnDate <= end;
     }
-
     return matchesSearch && matchesDate;
   });
 
@@ -105,30 +149,35 @@ const Transactions = ({ isDarkMode }) => {
     const workbook = XLSX.utils.book_new();
     const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } };
     const cellStyle = { alignment: { horizontal: "center" } };
-    const headers = [{ v: "Date", s: headerStyle }, { v: "Type", s: headerStyle }, { v: "Item", s: headerStyle }, { v: "Qty", s: headerStyle }, { v: "Alt Qty", s: headerStyle }, { v: "Remarks", s: headerStyle }];
+    const headers = [
+      { v: "Date", s: headerStyle }, 
+      { v: "Type", s: headerStyle }, 
+      { v: "Item", s: headerStyle }, 
+      { v: "Qty", s: headerStyle }, 
+      { v: "Rate", s: headerStyle }, // NEW
+      { v: "Alt Qty", s: headerStyle }, 
+      { v: "Remarks", s: headerStyle }
+    ];
     const rows = filteredTransactions.map(t => [
       { v: t.date, s: cellStyle },
       { v: t.type, s: { ...cellStyle, font: { color: { rgb: t.type === "IN" ? "166534" : "991B1B" }, bold: true } } },
       { v: t.itemName, s: cellStyle },
       { v: t.quantity, s: cellStyle },
+      { v: t.rate || "-", s: cellStyle }, // NEW
       { v: t.altQty || "-", s: cellStyle },
       { v: t.remarks, s: cellStyle }
     ]);
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    worksheet['!cols'] = [{ wch: 15 }, { wch: 10 }, { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 30 }];
+    worksheet['!cols'] = [{ wch: 15 }, { wch: 10 }, { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 30 }];
     XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
     XLSX.writeFile(workbook, "Transactions_Report.xlsx");
   };
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-      
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 md:mb-8 gap-4">
         <div><h1 className="text-2xl md:text-3xl font-bold">Transactions</h1><p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Track stock movements</p></div>
       </div>
-
-      {/* Toolbar */}
       <div className={`p-4 rounded-t-xl flex flex-col md:flex-row flex-wrap gap-4 justify-between items-center border-b ${isDarkMode ? 'bg-darkcard border-gray-700' : 'bg-white border-gray-200'}`}>
         <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto items-stretch md:items-center">
             <div className="relative w-full md:w-64"><Search className="absolute left-3 top-3 text-gray-400 h-5 w-5" /><input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} /></div>
@@ -139,13 +188,11 @@ const Transactions = ({ isDarkMode }) => {
           <button onClick={openAddModal} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-md transition-all text-sm md:text-base"><Plus size={18} /> <span className="hidden md:inline">Add Transaction</span><span className="md:hidden">Add</span></button>
         </div>
       </div>
-
-      {/* Table */}
       <div className={`overflow-x-auto rounded-b-xl shadow-sm border border-t-0 ${isDarkMode ? 'bg-darkcard border-gray-700' : 'bg-white border-gray-200'}`}>
         <table className="w-full text-left border-collapse min-w-[800px]">
           <thead>
             <tr className={`border-b ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-gray-50'}`}>
-              {["Date", "Type", "Item", "Qty", "Alt Qty", "Remarks"].map(h => <th key={h} className="p-4 font-semibold text-sm uppercase tracking-wide whitespace-nowrap">{h}</th>)}
+              {["Date", "Type", "Item", "Qty", "Rate", "Alt Qty", "Remarks"].map(h => <th key={h} className="p-4 font-semibold text-sm uppercase tracking-wide whitespace-nowrap">{h}</th>)}
               {userRole === 'admin' && <th className="p-4 font-semibold text-sm uppercase tracking-wide">Actions</th>}
             </tr>
           </thead>
@@ -156,23 +203,17 @@ const Transactions = ({ isDarkMode }) => {
                 <td className="p-4"><span className={`px-2 py-1 rounded text-xs font-bold ${txn.type === "IN" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>{txn.type}</span></td>
                 <td className="p-4 font-medium">{txn.itemName}</td>
                 <td className="p-4 font-bold">{txn.quantity}</td>
+                <td className="p-4">{txn.rate ? `₹${txn.rate}` : "-"}</td> {/* NEW RATE */}
                 <td className="p-4 opacity-70">{txn.altQty || "-"}</td>
                 <td className="p-4 text-sm opacity-80 truncate max-w-xs">{txn.remarks}</td>
-                {userRole === 'admin' && (
-                  <td className="p-4">
-                    <div className="flex gap-2">
-                      <button onClick={() => openEditModal(txn)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"><Pencil size={16} /></button>
-                      <button onClick={() => setDeleteId(txn.id)} className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition-colors"><Trash2 size={16} /></button>
-                    </div>
-                  </td>
-                )}
+                {userRole === 'admin' && (<td className="p-4"><div className="flex gap-2"><button onClick={() => openEditModal(txn)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"><Pencil size={16} /></button><button onClick={() => setDeleteId(txn.id)} className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition-colors"><Trash2 size={16} /></button></div></td>)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Main Transaction Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className={`w-[95%] md:w-full md:max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
@@ -186,10 +227,23 @@ const Transactions = ({ isDarkMode }) => {
                   <div className="flex flex-col"><label className="block text-sm font-medium mb-1">Date</label><DatePicker selected={formData.date} onChange={(date) => setFormData({...formData, date})} className={`w-full p-3 rounded-lg border outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-800'}`} dateFormat="yyyy-MM-dd" /></div>
                   <div><label className="block text-sm font-medium mb-1">Type</label><select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"><option value="IN">Stock IN (Purchase)</option><option value="OUT">Stock OUT (Use)</option></select></div>
                 </div>
-                <div><label className="block text-sm font-medium mb-1">Item Name</label><input required list="items" value={formData.itemName} onChange={handleItemSelect} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type to search..." /><datalist id="items">{inventory.map(item => <option key={item.id} value={item.name} />)}</datalist></div>
+                
+                {/* ITEM NAME INPUT WITH AUTO-DETECT LOGIC */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Item Name</label>
+                  <input required list="items" value={formData.itemName} onChange={handleItemSelect} onBlur={checkItemExists} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type to search or add new..." />
+                  <datalist id="items">{inventory.map(item => <option key={item.id} value={item.name} />)}</datalist>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><label className="block text-sm font-medium mb-1">Primary Qty {formData.unit && <span className="text-blue-500 font-bold">({formData.unit})</span>}</label><input required type="number" value={formData.quantity} onChange={handleQtyChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" /></div>
-                  <div><label className="block text-sm font-medium mb-1">Alt Qty {formData.altUnit && <span className="text-blue-500 font-bold">({formData.altUnit})</span>}</label><input type="number" value={formData.altQty} onChange={(e) => setFormData({...formData, altQty: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" /></div>
+                  
+                  {/* DYNAMIC FIELD: Show Rate if IN, else Show Alt Qty */}
+                  {formData.type === "IN" ? (
+                    <div><label className="block text-sm font-medium mb-1">Purchase Rate (₹)</label><input type="number" value={formData.rate} onChange={(e) => setFormData({...formData, rate: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Price per unit" /></div>
+                  ) : (
+                    <div><label className="block text-sm font-medium mb-1">Alt Qty {formData.altUnit && <span className="text-blue-500 font-bold">({formData.altUnit})</span>}</label><input type="number" value={formData.altQty} onChange={(e) => setFormData({...formData, altQty: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" /></div>
+                  )}
                 </div>
                 <div><label className="block text-sm font-medium mb-1">Remarks</label><textarea value={formData.remarks} onChange={(e) => setFormData({...formData, remarks: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Purchase order #123" rows="2"></textarea></div>
                 <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium transition-colors">Cancel</button><button type="submit" className="flex-1 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg transition-all">{editingId ? "Update" : "Save"}</button></div>
@@ -199,37 +253,47 @@ const Transactions = ({ isDarkMode }) => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {deleteId && (
+      {/* NEW "QUICK ADD ITEM" MODAL */}
+      {isQuickAddOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className={`w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center transform transition-all scale-100 ${isDarkMode ? 'bg-gray-900 text-white border border-gray-700' : 'bg-white text-gray-800'}`}>
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-              <AlertTriangle className="h-6 w-6 text-red-600" />
+          <div className={`w-[95%] md:w-full md:max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center shrink-0">
+              <h2 className="text-xl font-bold flex items-center gap-2"><Package className="text-green-500" /> Create New Item: {quickItemName}</h2>
+              <button onClick={() => setIsQuickAddOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"><X size={20} /></button>
             </div>
-            <h3 className="text-lg font-bold mb-2">Delete Transaction?</h3>
-            <p className={`text-sm mb-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-              Are you sure you want to delete this transaction? Stock levels will remain unchanged unless you adjust them manually.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteId(null)} className={`flex-1 py-2.5 rounded-lg border font-medium transition-colors ${isDarkMode ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-50'}`}>Cancel</button>
-              <button onClick={confirmDelete} className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold shadow-md transition-colors">Delete</button>
+            <div className="overflow-y-auto p-6">
+              <form onSubmit={saveQuickItem} className="space-y-4">
+                {/* Minimal Form for Quick Add */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div><label className="block text-sm font-medium mb-1">Primary Unit *</label><select required name="unit" value={newItem.unit} onChange={handleQuickAddChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500">{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+                  <div><label className="block text-sm font-medium mb-1">Alt Unit</label><select name="altUnit" value={newItem.altUnit} onChange={handleQuickAddChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"><option value="">None</option>{UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div><label className={`block text-sm font-medium mb-1 ${!newItem.altUnit ? "opacity-50" : ""}`}>Conversion Factor</label><input name="factor" value={newItem.factor} onChange={handleQuickAddChange} type="number" disabled={!newItem.altUnit} className={`w-full p-3 rounded-lg border dark:border-gray-700 outline-none transition-colors ${!newItem.altUnit ? "bg-gray-100 dark:bg-gray-800 cursor-not-allowed opacity-50" : "dark:bg-gray-800 focus:ring-2 focus:ring-blue-500"}`} placeholder={!newItem.altUnit ? "N/A" : "1 Pri = ? Alt"} /></div>
+                   <div><label className="block text-sm font-medium mb-1">Alert Qty</label><input required name="alertQty" value={newItem.alertQty} onChange={handleQuickAddChange} type="number" className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Min Stock" /></div>
+                </div>
+                <div className="pt-4 flex gap-3">
+                    <button type="button" onClick={() => setIsQuickAddOpen(false)} className="flex-1 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium">Cancel</button>
+                    <button type="submit" className="flex-1 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg">Create & Continue</button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
       )}
 
-      {/* Styles for DatePicker */}
-      <style>{`
-        .react-datepicker-wrapper { width: 100%; }
-        .react-datepicker__input-container input { width: 100%; }
-        .dark .react-datepicker { background-color: #1f2937; border-color: #374151; color: white; font-family: inherit; }
-        .dark .react-datepicker__header { background-color: #111827; border-bottom-color: #374151; }
-        .dark .react-datepicker__current-month, .dark .react-datepicker-time__header, .dark .react-datepicker-year-header { color: white; }
-        .dark .react-datepicker__day-name, .dark .react-datepicker__day, .dark .react-datepicker__time-name { color: #d1d5db; }
-        .dark .react-datepicker__day:hover, .dark .react-datepicker__month-text:hover, .dark .react-datepicker__quarter-text:hover, .dark .react-datepicker__year-text:hover { background-color: #374151; }
-        .dark .react-datepicker__day--selected, .dark .react-datepicker__day--in-selecting-range, .dark .react-datepicker__day--in-range { background-color: #2563eb; color: white; }
-        .react-datepicker__close-icon::after { background-color: #ef4444; color: white; }
-      `}</style>
+      {/* Delete Modal */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className={`w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center transform transition-all scale-100 ${isDarkMode ? 'bg-gray-900 text-white border border-gray-700' : 'bg-white text-gray-800'}`}>
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4"><AlertTriangle className="h-6 w-6 text-red-600" /></div>
+            <h3 className="text-lg font-bold mb-2">Delete Transaction?</h3>
+            <p className={`text-sm mb-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Are you sure? Stock levels will remain unchanged.</p>
+            <div className="flex gap-3"><button onClick={() => setDeleteId(null)} className={`flex-1 py-2.5 rounded-lg border font-medium transition-colors ${isDarkMode ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-50'}`}>Cancel</button><button onClick={confirmDelete} className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold shadow-md transition-colors">Delete</button></div>
+          </div>
+        </div>
+      )}
+      <style>{`.react-datepicker-wrapper { width: 100%; } .react-datepicker__input-container input { width: 100%; } .dark .react-datepicker { background-color: #1f2937; border-color: #374151; color: white; } .dark .react-datepicker__header { background-color: #111827; border-bottom-color: #374151; } .dark .react-datepicker__current-month, .dark .react-datepicker-time__header, .dark .react-datepicker-year-header { color: white; } .dark .react-datepicker__day-name, .dark .react-datepicker__day { color: #d1d5db; } .dark .react-datepicker__day:hover { background-color: #374151; } .dark .react-datepicker__day--selected { background-color: #2563eb; color: white; } .react-datepicker__close-icon::after { background-color: #ef4444; color: white; }`}</style>
     </div>
   );
 };
