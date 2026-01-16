@@ -5,7 +5,6 @@ import XLSX from 'xlsx-js-style';
 
 const Dashboard = ({ isDarkMode }) => {
   const { inventory } = useInventory();
-  
   const [searchTerm, setSearchTerm] = useState("");
   const [sortByAlert, setSortByAlert] = useState(false);
 
@@ -17,11 +16,7 @@ const Dashboard = ({ isDarkMode }) => {
   );
 
   if (sortByAlert) {
-    processedData.sort((a, b) => {
-      const gapA = a.quantity - a.alertQty;
-      const gapB = b.quantity - b.alertQty;
-      return gapA - gapB;
-    });
+    processedData.sort((a, b) => (a.quantity - a.alertQty) - (b.quantity - b.alertQty));
   } else {
     processedData.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -35,12 +30,11 @@ const Dashboard = ({ isDarkMode }) => {
       { v: "Status", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }
     ];
     const rows = processedData.map(item => {
-      // Formatting Logic
-      let altVal = parseFloat(item.altQuantity);
-      if (isNaN(altVal)) altVal = 0;
-      
-      // If user has set an Alt Unit (e.g. "box"), ALWAYS show the number, even if 0.
-      const altText = item.altUnit ? `${altVal.toFixed(2).replace(/\.00$/, '')} ${item.altUnit}` : '-';
+      // Clean Number Handling
+      const altVal = Number(item.altQuantity) || 0;
+      const altText = (altVal !== 0 || item.altUnit) 
+        ? `${altVal.toFixed(2).replace(/\.00$/, '')} ${item.altUnit || ''}` 
+        : '-';
 
       return [
         { v: item.name, s: { alignment: { horizontal: "center" } } },
@@ -61,14 +55,16 @@ const Dashboard = ({ isDarkMode }) => {
         <div><h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1><p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Real-time stock overview</p></div>
         <div className={`text-sm font-mono ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
       </div>
+      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8">
         <div className={`p-6 rounded-2xl shadow-lg border-l-4 border-blue-500 ${isDarkMode ? 'bg-darkcard' : 'bg-white'}`}>
           <div className="flex justify-between items-center"><div><p className="text-gray-400 text-xs md:text-sm font-medium uppercase">Total Products</p><h2 className="text-3xl font-bold mt-1">{totalProducts}</h2></div><div className="p-3 bg-blue-500/10 rounded-full text-blue-500"><Package size={28} /></div></div>
         </div>
         <div onClick={() => setSortByAlert(!sortByAlert)} className={`p-6 rounded-2xl shadow-lg border-l-4 border-red-500 cursor-pointer transition-all hover:scale-[1.02] active:scale-95 ${isDarkMode ? 'bg-darkcard' : 'bg-white'} ${sortByAlert ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-gray-900' : ''}`}>
-          <div className="flex justify-between items-center"><div><p className="text-gray-400 text-xs md:text-sm font-medium uppercase">Total Alert Products</p><h2 className="text-3xl font-bold mt-1 text-red-500">{alertProducts}</h2><p className="text-xs text-red-400 mt-1 underline">{sortByAlert ? "Table Sorted by Priority" : "Click to Prioritize Low Stock"}</p></div><div className="p-3 bg-red-500/10 rounded-full text-red-500"><AlertTriangle size={28} /></div></div>
+          <div className="flex justify-between items-center"><div><p className="text-gray-400 text-xs md:text-sm font-medium uppercase">Total Alert Products</p><h2 className="text-3xl font-bold mt-1 text-red-500">{alertProducts}</h2></div><div className="p-3 bg-red-500/10 rounded-full text-red-500"><AlertTriangle size={28} /></div></div>
         </div>
       </div>
+
       <div className={`rounded-2xl shadow-lg flex flex-col ${isDarkMode ? 'bg-darkcard' : 'bg-white'}`}>
         <div className={`p-4 border-b flex flex-col md:flex-row gap-4 justify-between items-center ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
           <div className="relative w-full md:w-80"><Search className="absolute left-3 top-3 text-gray-400 h-5 w-5" /><input type="text" placeholder="Filter products..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} /></div>
@@ -88,38 +84,21 @@ const Dashboard = ({ isDarkMode }) => {
               {processedData.map((item) => {
                 const isLow = item.quantity <= item.alertQty;
                 
-                // --- ROBUST DISPLAY LOGIC ---
-                // 1. Get value (default to 0)
-                let altVal = parseFloat(item.altQuantity);
-                if (isNaN(altVal)) altVal = 0;
-
-                // 2. Format
-                const formattedAlt = altVal.toFixed(2).replace(/\.00$/, ''); 
-
-                // 3. Logic: If Alt Unit exists, show "50 box" or "0 box". 
-                //    If NO Alt Unit exists, but value > 0, show "50". 
-                //    Only show "-" if value is 0 AND no unit.
+                // SIMPLE DISPLAY LOGIC
+                const altVal = Number(item.altQuantity) || 0;
                 let display = "-";
-                if (item.altUnit) {
-                    display = `${formattedAlt} <span class="text-xs opacity-60">${item.altUnit}</span>`;
-                } else if (altVal !== 0) {
-                    display = formattedAlt;
+                // If there's a value OR a unit is defined, show the number
+                if (altVal !== 0 || (item.altUnit && item.altUnit !== '-')) {
+                    display = `${altVal.toFixed(2).replace(/\.00$/, '')} <span class="text-xs opacity-60">${item.altUnit || ''}</span>`;
                 }
 
                 return (
                   <tr key={item.id} className={`hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
-                    
-                    {/* Render HTML safely for the small unit text */}
                     <td className="p-4 text-center font-mono opacity-80">
-                      {display !== '-' ? (
-                        <span dangerouslySetInnerHTML={{ __html: display }}></span>
-                      ) : (
-                        <span className="opacity-30">-</span>
-                      )}
+                      {display !== '-' ? (<span dangerouslySetInnerHTML={{ __html: display }}></span>) : (<span className="opacity-30">-</span>)}
                     </td>
-                    
                     <td className="p-4 text-center"><span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${isLow ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>{isLow ? <AlertCircle size={14} /> : <CheckCircle size={14} />}{isLow ? "Low" : "OK"}</span></td>
                   </tr>
                 );
