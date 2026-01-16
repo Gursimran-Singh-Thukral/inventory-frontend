@@ -30,40 +30,61 @@ const Transactions = ({ isDarkMode }) => {
     itemName: "", type: "IN", quantity: "", altQty: "", remarks: "", unit: "", altUnit: "", rate: ""
   });
 
-  // --- HANDLERS ---
+  // --- 1. SMART ITEM LOOKUP (Case Insensitive) ---
+  const findItemByName = (name) => {
+    if (!name) return null;
+    return inventory.find(i => i.name.trim().toLowerCase() === name.trim().toLowerCase());
+  };
+
   const handleNameChange = (e) => {
     const val = e.target.value;
     setFormData(prev => ({ ...prev, itemName: val }));
-    const item = inventory.find(i => i.name === val);
+    
+    // Auto-fill units if item found
+    const item = findItemByName(val);
     if (item) {
-        setFormData(prev => ({ ...prev, itemName: val, unit: item.unit, altUnit: item.altUnit }));
+        setFormData(prev => ({ ...prev, itemName: item.name, unit: item.unit, altUnit: item.altUnit }));
     } else {
-        setFormData(prev => ({ ...prev, itemName: val, unit: "", altUnit: "" }));
+        // Keep units empty if new item
+        setFormData(prev => ({ ...prev, unit: "", altUnit: "" }));
     }
   };
 
   const checkItemExists = () => {
-    if (formData.itemName.trim() !== "" && !inventory.find(i => i.name.toLowerCase() === formData.itemName.trim().toLowerCase())) {
+    if (formData.itemName.trim() !== "" && !findItemByName(formData.itemName)) {
       setQuickItemName(formData.itemName);
       setNewItem(prev => ({ ...prev, name: formData.itemName })); 
       setIsQuickAddOpen(true);
     }
   };
 
+  // --- 2. RESTORED & FIXED CALCULATOR ---
   useEffect(() => {
-    const item = inventory.find(i => i.name === formData.itemName);
+    // Stop if we are editing an existing transaction (prevent overwriting user's saved data)
+    // Only auto-calc for NEW transactions OR if user explicitly changes qty
+    
+    const item = findItemByName(formData.itemName);
+    
+    // Conditions: Item exists + Quantity typed + Factor exists + Not Manual
     if (item && formData.quantity && item.factor && item.factor !== "Manual" && item.factor !== "-") {
         const factor = parseFloat(item.factor);
         if (!isNaN(factor)) {
+            // Calculate: Qty * Factor
             const calculatedAlt = (parseFloat(formData.quantity) * factor).toFixed(2);
+            
+            // Remove .00
+            const cleanCalc = calculatedAlt.endsWith('.00') ? calculatedAlt.slice(0, -3) : calculatedAlt;
+
             setFormData(prev => {
-                // Only update if value actually changed to avoid loop
-                if (prev.altQty !== calculatedAlt) return { ...prev, altQty: calculatedAlt };
+                // Prevent infinite loop: Only update if value is different
+                if (String(prev.altQty) !== String(cleanCalc)) {
+                    return { ...prev, altQty: cleanCalc };
+                }
                 return prev;
             });
         }
     }
-  }, [formData.quantity, formData.itemName, inventory]);
+  }, [formData.quantity, formData.itemName, inventory]); // Dependencies: Re-run when Qty or Name changes
 
   const handleQtyChange = (e) => setFormData(prev => ({ ...prev, quantity: e.target.value }));
   
@@ -106,7 +127,7 @@ const Transactions = ({ isDarkMode }) => {
     }
   };
 
-  // --- STRICT SAVE HANDLER (Enforces Numbers) ---
+  // --- SAVE HANDLER (Enforces Numbers) ---
   const handleSave = async (e) => {
     e.preventDefault();
     
