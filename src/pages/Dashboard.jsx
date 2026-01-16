@@ -96,6 +96,7 @@ const Dashboard = ({ isDarkMode }) => {
                   <tr key={item.id} className={`hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
+                    <td className="p-4 text-center font-bold font-mono text-lg">{item.altQuantity}</td>
                     
                     <td className="p-4 text-center font-mono opacity-80">
                       {display !== '-' ? (<span dangerouslySetInnerHTML={{ __html: display }}></span>) : (<span className="opacity-30">-</span>)}
