@@ -14,35 +14,36 @@ const Transactions = ({ isDarkMode }) => {
   const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
   
-  // Modal States
+  // Modal Visibility States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState(null); // ID of txn to delete
+  
+  // Selection States
   const [editingId, setEditingId] = useState(null);
+  const [deleteId, setDeleteId] = useState(null); // <--- Make sure this is null initially
 
   // Data States
   const [quickItemName, setQuickItemName] = useState("");
   const [newItem, setNewItem] = useState({ name: "", unit: "pcs", altUnit: "", factor: "", alertQty: "" });
-  const UNIT_OPTIONS = ["pcs", "nos", "set", "kg", "g", "can", "mtr", "feet", "roll", "pkt", "ltr", "box"];
-
   const [formData, setFormData] = useState({
     date: new Date(), 
     itemName: "", type: "IN", quantity: "", altQty: "", remarks: "", unit: "", altUnit: "", rate: ""
   });
 
-  // --- DELETE HANDLER (Fixed) ---
-  const confirmDelete = async () => {
-    if (!deleteId) return;
-    try {
-      await deleteTransaction(deleteId);
-    } catch (error) {
-      console.error("Delete failed", error);
-    } finally {
-      setDeleteId(null); // Always close modal
-    }
+  const UNIT_OPTIONS = ["pcs", "nos", "set", "kg", "g", "can", "mtr", "feet", "roll", "pkt", "ltr", "box"];
+
+  // --- DELETE LOGIC ---
+  const handleDeleteClick = (id) => {
+    setDeleteId(id); // 1. Set the ID to trigger the modal
   };
 
-  // --- CALCULATOR LOGIC ---
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    await deleteTransaction(deleteId); // 2. Perform Delete
+    setDeleteId(null); // 3. Close Modal
+  };
+
+  // --- CALCULATOR & HANDLERS ---
   const findItemByName = (name) => {
     if (!name) return null;
     return inventory.find(i => i.name.trim().toLowerCase() === name.trim().toLowerCase());
@@ -213,7 +214,14 @@ const Transactions = ({ isDarkMode }) => {
                 <td className="p-4">{txn.rate ? `₹${txn.rate}` : "-"}</td>
                 <td className="p-4 opacity-70">{txn.altQty || "-"}</td>
                 <td className="p-4 text-sm opacity-80 truncate max-w-xs">{txn.remarks}</td>
-                {userRole === 'admin' && (<td className="p-4"><div className="flex gap-2"><button onClick={() => openEditModal(txn)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"><Pencil size={16} /></button><button onClick={() => setDeleteId(txn.id)} className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition-colors"><Trash2 size={16} /></button></div></td>)}
+                {userRole === 'admin' && (
+                  <td className="p-4">
+                    <div className="flex gap-2">
+                      <button onClick={() => openEditModal(txn)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors"><Pencil size={16} /></button>
+                      <button onClick={() => handleDeleteClick(txn.id)} className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
