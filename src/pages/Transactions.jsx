@@ -13,54 +13,56 @@ const Transactions = ({ isDarkMode }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState([null, null]);
   const [startDate, endDate] = dateRange;
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [deleteId, setDeleteId] = useState(null);
   
-  // Quick Add States
+  // Modal States
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState(null); // ID of txn to delete
+  const [editingId, setEditingId] = useState(null);
+
+  // Data States
   const [quickItemName, setQuickItemName] = useState("");
   const [newItem, setNewItem] = useState({ name: "", unit: "pcs", altUnit: "", factor: "", alertQty: "" });
-
   const UNIT_OPTIONS = ["pcs", "nos", "set", "kg", "g", "can", "mtr", "feet", "roll", "pkt", "ltr", "box"];
 
-  // Form State
   const [formData, setFormData] = useState({
     date: new Date(), 
     itemName: "", type: "IN", quantity: "", altQty: "", remarks: "", unit: "", altUnit: "", rate: ""
   });
 
-  // --- HELPER: FIND ITEM ---
+  // --- DELETE HANDLER (Fixed) ---
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await deleteTransaction(deleteId);
+    } catch (error) {
+      console.error("Delete failed", error);
+    } finally {
+      setDeleteId(null); // Always close modal
+    }
+  };
+
+  // --- CALCULATOR LOGIC ---
   const findItemByName = (name) => {
     if (!name) return null;
     return inventory.find(i => i.name.trim().toLowerCase() === name.trim().toLowerCase());
   };
 
-  // --- HELPER: CALCULATE ALT QTY ---
-  // Returns the calculated number or the existing value if calc isn't possible
   const calculateAlt = (qty, item) => {
     if (!item || !qty || !item.factor || item.factor === "Manual" || item.factor === "-") return null;
-    
     const factor = parseFloat(item.factor);
     if (isNaN(factor)) return null;
-
-    const result = (parseFloat(qty) * factor).toFixed(2);
-    // Remove .00 if present
-    return parseFloat(result); 
+    return parseFloat((parseFloat(qty) * factor).toFixed(2)); 
   };
 
-  // --- HANDLER 1: NAME CHANGE (Auto-Fill Units & Recalc) ---
   const handleNameChange = (e) => {
     const val = e.target.value;
     const item = findItemByName(val);
-    
     setFormData(prev => {
         const newData = { ...prev, itemName: val };
-        
         if (item) {
             newData.unit = item.unit;
             newData.altUnit = item.altUnit;
-            // Try to calculate immediately if quantity exists
             const autoAlt = calculateAlt(prev.quantity, item);
             if (autoAlt !== null) newData.altQty = autoAlt;
         } else {
@@ -71,18 +73,13 @@ const Transactions = ({ isDarkMode }) => {
     });
   };
 
-  // --- HANDLER 2: QTY CHANGE (Trigger Calculation Here) ---
   const handleQtyChange = (e) => {
     const val = e.target.value;
     const item = findItemByName(formData.itemName);
-    
     setFormData(prev => {
         const newData = { ...prev, quantity: val };
-        
-        // Calculate immediately when typing quantity
         const autoAlt = calculateAlt(val, item);
         if (autoAlt !== null) newData.altQty = autoAlt;
-        
         return newData;
     });
   };
@@ -127,25 +124,16 @@ const Transactions = ({ isDarkMode }) => {
     setIsModalOpen(true);
   };
 
-  const confirmDelete = async () => {
-    if (deleteId) {
-      await deleteTransaction(deleteId); 
-      setDeleteId(null); 
-    }
-  };
-
   const handleSave = async (e) => {
     e.preventDefault();
-    
     const payload = { 
         ...formData, 
         itemName: formData.itemName.trim(), 
         quantity: parseFloat(formData.quantity) || 0, 
-        altQty: parseFloat(formData.altQty) || 0, // Ensure Number
+        altQty: parseFloat(formData.altQty) || 0,
         rate: parseFloat(formData.rate) || 0,
         date: formData.date.toISOString().split('T')[0] 
     };
-
     if (editingId) await updateTransaction({ ...payload, id: editingId });
     else await addTransaction(payload);
     setIsModalOpen(false);
@@ -297,6 +285,21 @@ const Transactions = ({ isDarkMode }) => {
                 </div>
                 <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsQuickAddOpen(false)} className="flex-1 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium">Cancel</button><button type="submit" className="flex-1 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg">Create</button></div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FIXED DELETE MODAL PLACEMENT */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className={`w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center transform transition-all scale-100 ${isDarkMode ? 'bg-gray-900 text-white border border-gray-700' : 'bg-white text-gray-800'}`}>
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4"><AlertTriangle className="h-6 w-6 text-red-600" /></div>
+            <h3 className="text-lg font-bold mb-2">Delete Transaction?</h3>
+            <p className={`text-sm mb-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Are you sure? This action cannot be undone.</p>
+            <div className="flex gap-3">
+                <button onClick={() => setDeleteId(null)} className={`flex-1 py-2.5 rounded-lg border font-medium transition-colors ${isDarkMode ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-50'}`}>Cancel</button>
+                <button onClick={confirmDelete} className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold shadow-md transition-colors">Delete</button>
             </div>
           </div>
         </div>
