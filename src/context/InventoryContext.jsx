@@ -4,7 +4,7 @@ import axios from 'axios';
 const InventoryContext = createContext();
 
 // ⚠️ CHECK THIS: If testing on laptop, use localhost. If deployed, use Render URL.
-const API_URL = "https://inventory-management-system-i7af.onrender.com"; 
+const API_URL = "https://inventory-management-system-i7af.onrender.com/api"; 
 // const API_URL = "http://localhost:5000/api"; 
 
 export const InventoryProvider = ({ children }) => {
