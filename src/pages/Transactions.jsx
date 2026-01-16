@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Download, Plus, X, ClipboardList, Pencil, Trash2, Calendar as CalendarIcon, AlertTriangle, Package } from 'lucide-react';
 import XLSX from 'xlsx-js-style';
 import DatePicker from "react-datepicker";
@@ -30,42 +30,44 @@ const Transactions = ({ isDarkMode }) => {
     itemName: "", type: "IN", quantity: "", altQty: "", remarks: "", unit: "", altUnit: "", rate: ""
   });
 
-  // --- FIXED: HANDLE ITEM SELECT ---
-  const handleItemSelect = (e) => {
-    const selectedName = e.target.value;
-    
-    // 1. ALWAYS update the text box immediately (Fixes the "Stuck Cursor" bug)
-    setFormData(prev => ({ ...prev, itemName: selectedName }));
+  // --- 1. FIXED INPUT HANDLING (Separated Typing from Logic) ---
+  const handleNameChange = (e) => {
+    // Just update the text immediately so typing never freezes
+    const val = e.target.value;
+    setFormData(prev => ({ ...prev, itemName: val }));
 
-    // 2. Then check if it matches an existing item
-    const item = inventory.find(i => i.name === selectedName);
-
+    // Check for match
+    const item = inventory.find(i => i.name === val);
     if (item) {
-      // It exists -> Auto-fill units
-      setFormData(prev => ({ 
-        ...prev, 
-        itemName: selectedName, // Ensure name is set
-        unit: item.unit,
-        altUnit: item.altUnit
-      }));
-      
-      // Auto-calculate conversion if Quantity is already filled
-      if (formData.quantity && item.factor && item.factor !== "Manual" && item.factor !== "-") {
-        const factor = parseFloat(item.factor);
-        setFormData(prev => ({ ...prev, altQty: (parseFloat(prev.quantity) * factor).toFixed(2) }));
-      }
+        setFormData(prev => ({ 
+            ...prev, 
+            itemName: val,
+            unit: item.unit,
+            altUnit: item.altUnit 
+        }));
     } else {
-      // It's a new item -> Clear units so they don't carry over from previous selection
-      setFormData(prev => ({ 
-        ...prev, 
-        unit: "",
-        altUnit: ""
-      }));
+        // If no match, clear units (optional, but keeps data clean)
+        setFormData(prev => ({ ...prev, itemName: val, unit: "", altUnit: "" }));
     }
   };
 
+  // --- 2. AUTO-CALCULATE LOGIC (Runs when Qty changes or Item is selected) ---
+  useEffect(() => {
+    const item = inventory.find(i => i.name === formData.itemName);
+    if (item && formData.quantity && item.factor && item.factor !== "Manual" && item.factor !== "-") {
+        const factor = parseFloat(item.factor);
+        if (!isNaN(factor)) {
+            const calculatedAlt = (parseFloat(formData.quantity) * factor).toFixed(2);
+            // Only update if it's different to avoid loops
+            setFormData(prev => {
+                if (prev.altQty !== calculatedAlt) return { ...prev, altQty: calculatedAlt };
+                return prev;
+            });
+        }
+    }
+  }, [formData.quantity, formData.itemName, inventory]);
+
   const checkItemExists = () => {
-    // Only trigger Quick Add if the name is not empty and doesn't match any inventory item
     if (formData.itemName.trim() !== "" && !inventory.find(i => i.name === formData.itemName)) {
       setQuickItemName(formData.itemName);
       setNewItem(prev => ({ ...prev, name: formData.itemName })); 
@@ -73,15 +75,8 @@ const Transactions = ({ isDarkMode }) => {
     }
   };
 
-  // --- REST OF HANDLERS (Standard) ---
   const handleQtyChange = (e) => {
-    const qty = e.target.value;
-    setFormData(prev => ({ ...prev, quantity: qty }));
-    const item = inventory.find(i => i.name === formData.itemName);
-    if (item && qty && item.factor && item.factor !== "Manual" && item.factor !== "-") {
-      const factor = parseFloat(item.factor);
-      setFormData(prev => ({ ...prev, altQty: (parseFloat(qty) * factor).toFixed(2) }));
-    }
+    setFormData(prev => ({ ...prev, quantity: e.target.value }));
   };
 
   const handleQuickAddChange = (e) => {
@@ -215,7 +210,7 @@ const Transactions = ({ isDarkMode }) => {
         </table>
       </div>
 
-      {/* MODALS (Quick Add & Delete) - Identical to previous turn but using the new handleItemSelect logic implicitly via state */}
+      {/* MODALS */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className={`w-[95%] md:w-full md:max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
@@ -229,11 +224,29 @@ const Transactions = ({ isDarkMode }) => {
                   <div className="flex flex-col"><label className="block text-sm font-medium mb-1">Date</label><DatePicker selected={formData.date} onChange={(date) => setFormData({...formData, date})} className={`w-full p-3 rounded-lg border outline-none focus:ring-2 focus:ring-blue-500 ${isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-gray-800'}`} dateFormat="yyyy-MM-dd" /></div>
                   <div><label className="block text-sm font-medium mb-1">Type</label><select value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500"><option value="IN">Stock IN (Purchase)</option><option value="OUT">Stock OUT (Use)</option></select></div>
                 </div>
-                <div><label className="block text-sm font-medium mb-1">Item Name</label><input required list="items" value={formData.itemName} onChange={handleItemSelect} onBlur={checkItemExists} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type to search or add new..." /><datalist id="items">{inventory.map(item => <option key={item.id} value={item.name} />)}</datalist></div>
+                
+                {/* FIXED ITEM NAME INPUT */}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Item Name</label>
+                  <input required list="items" value={formData.itemName} onChange={handleNameChange} onBlur={checkItemExists} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Type to search or add new..." />
+                  <datalist id="items">{inventory.map(item => <option key={item.id} value={item.name} />)}</datalist>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><label className="block text-sm font-medium mb-1">Primary Qty {formData.unit && <span className="text-blue-500 font-bold">({formData.unit})</span>}</label><input required type="number" value={formData.quantity} onChange={handleQtyChange} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" /></div>
-                  {formData.type === "IN" ? (<div><label className="block text-sm font-medium mb-1">Purchase Rate (₹)</label><input type="number" value={formData.rate} onChange={(e) => setFormData({...formData, rate: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Price per unit" /></div>) : (<div><label className="block text-sm font-medium mb-1">Alt Qty {formData.altUnit && <span className="text-blue-500 font-bold">({formData.altUnit})</span>}</label><input type="number" value={formData.altQty} onChange={(e) => setFormData({...formData, altQty: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" /></div>)}
+                  
+                  {/* --- FIXED LAYOUT: ALT QTY ALWAYS VISIBLE, RATE ONLY ON IN --- */}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Alt Qty {formData.altUnit && <span className="text-blue-500 font-bold">({formData.altUnit})</span>}</label>
+                    <input type="number" value={formData.altQty} onChange={(e) => setFormData({...formData, altQty: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.00" />
+                  </div>
                 </div>
+
+                {/* SHOW RATE FIELD ONLY FOR IN (Stacked Below) */}
+                {formData.type === "IN" && (
+                    <div><label className="block text-sm font-medium mb-1">Purchase Rate (₹)</label><input type="number" value={formData.rate} onChange={(e) => setFormData({...formData, rate: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Price per unit" /></div>
+                )}
+
                 <div><label className="block text-sm font-medium mb-1">Remarks</label><textarea value={formData.remarks} onChange={(e) => setFormData({...formData, remarks: e.target.value})} className="w-full p-3 rounded-lg border dark:bg-gray-800 dark:border-gray-700 outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Purchase order #123" rows="2"></textarea></div>
                 <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium">Cancel</button><button type="submit" className="flex-1 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg">Save</button></div>
               </form>
@@ -262,17 +275,6 @@ const Transactions = ({ isDarkMode }) => {
                 <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsQuickAddOpen(false)} className="flex-1 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 font-medium">Cancel</button><button type="submit" className="flex-1 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold shadow-lg">Create</button></div>
               </form>
             </div>
-          </div>
-        </div>
-      )}
-      
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className={`w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center transform transition-all scale-100 ${isDarkMode ? 'bg-gray-900 text-white border border-gray-700' : 'bg-white text-gray-800'}`}>
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4"><AlertTriangle className="h-6 w-6 text-red-600" /></div>
-            <h3 className="text-lg font-bold mb-2">Delete Transaction?</h3>
-            <p className={`text-sm mb-6 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Are you sure? Stock levels will remain unchanged.</p>
-            <div className="flex gap-3"><button onClick={() => setDeleteId(null)} className={`flex-1 py-2.5 rounded-lg border font-medium transition-colors ${isDarkMode ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-50'}`}>Cancel</button><button onClick={confirmDelete} className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold shadow-md transition-colors">Delete</button></div>
           </div>
         </div>
       )}
