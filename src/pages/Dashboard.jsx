@@ -28,28 +28,20 @@ const Dashboard = ({ isDarkMode }) => {
 
   const handleExport = () => {
     const workbook = XLSX.utils.book_new();
-    const headerStyle = { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } };
-    const cellStyle = { alignment: { horizontal: "center" } };
-
     const headers = [
-      { v: "Product Name", s: headerStyle }, 
-      { v: "Primary Qty", s: headerStyle }, 
-      { v: "Alt Qty Remaining", s: headerStyle }, // <--- NEW HEADER
-      { v: "Status", s: headerStyle }
+      { v: "Product Name", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }, 
+      { v: "Primary Qty left", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }, 
+      { v: "Alt qty left", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }, 
+      { v: "Status", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }
     ];
-
-    const rows = processedData.map(item => {
-      const isLow = item.quantity <= item.alertQty;
-      return [
-        { v: item.name, s: cellStyle },
-        { v: `${item.quantity} ${item.unit}`, s: cellStyle },
-        { v: item.altQuantity !== '-' ? `${item.altQuantity} ${item.altUnit}` : '-', s: cellStyle }, // <--- NEW DATA
-        { v: isLow ? "LOW" : "OK", s: { font: { color: { rgb: isLow ? "DC2626" : "166534" }, bold: true }, alignment: { horizontal: "center" } } }
-      ];
-    });
-
+    const rows = processedData.map(item => [
+      { v: item.name, s: { alignment: { horizontal: "center" } } },
+      { v: `${item.quantity} ${item.unit}`, s: { alignment: { horizontal: "center" } } },
+      { v: item.altQuantity !== '-' ? `${item.altQuantity} ${item.altUnit}` : '-', s: { alignment: { horizontal: "center" } } }, 
+      { v: item.quantity <= item.alertQty ? "LOW" : "OK", s: { font: { color: { rgb: item.quantity <= item.alertQty ? "DC2626" : "166534" }, bold: true }, alignment: { horizontal: "center" } } }
+    ]);
     const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    worksheet['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 20 }, { wch: 15 }];
+    worksheet['!cols'] = [{ wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }];
     XLSX.utils.book_append_sheet(workbook, worksheet, "Dashboard_Report");
     XLSX.writeFile(workbook, "Stock_Status_Report.xlsx");
   };
@@ -60,7 +52,6 @@ const Dashboard = ({ isDarkMode }) => {
         <div><h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1><p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>Real-time stock overview</p></div>
         <div className={`text-sm font-mono ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8">
         <div className={`p-6 rounded-2xl shadow-lg border-l-4 border-blue-500 ${isDarkMode ? 'bg-darkcard' : 'bg-white'}`}>
           <div className="flex justify-between items-center"><div><p className="text-gray-400 text-xs md:text-sm font-medium uppercase">Total Products</p><h2 className="text-3xl font-bold mt-1">{totalProducts}</h2></div><div className="p-3 bg-blue-500/10 rounded-full text-blue-500"><Package size={28} /></div></div>
@@ -69,20 +60,19 @@ const Dashboard = ({ isDarkMode }) => {
           <div className="flex justify-between items-center"><div><p className="text-gray-400 text-xs md:text-sm font-medium uppercase">Total Alert Products</p><h2 className="text-3xl font-bold mt-1 text-red-500">{alertProducts}</h2><p className="text-xs text-red-400 mt-1 underline">{sortByAlert ? "Table Sorted by Priority" : "Click to Prioritize Low Stock"}</p></div><div className="p-3 bg-red-500/10 rounded-full text-red-500"><AlertTriangle size={28} /></div></div>
         </div>
       </div>
-
       <div className={`rounded-2xl shadow-lg flex flex-col ${isDarkMode ? 'bg-darkcard' : 'bg-white'}`}>
         <div className={`p-4 border-b flex flex-col md:flex-row gap-4 justify-between items-center ${isDarkMode ? 'border-gray-700' : 'border-gray-100'}`}>
           <div className="relative w-full md:w-80"><Search className="absolute left-3 top-3 text-gray-400 h-5 w-5" /><input type="text" placeholder="Filter products..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none transition-colors ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`} /></div>
           <button onClick={handleExport} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg shadow-md transition-all font-medium w-full md:w-auto justify-center"><Download size={18} /> Export List</button>
         </div>
-        
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[600px]">
             <thead>
               <tr className={`border-b ${isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-100 bg-gray-50'}`}>
+                {/* 4 COLUMNS AS REQUESTED */}
                 <th className="p-4 text-sm font-bold uppercase tracking-wide">Product Name</th>
-                <th className="p-4 text-sm font-bold uppercase tracking-wide text-center">Primary Qty</th>
-                <th className="p-4 text-sm font-bold uppercase tracking-wide text-center">Alt Qty Left</th> {/* NEW HEADER */}
+                <th className="p-4 text-sm font-bold uppercase tracking-wide text-center">Primary Qty left</th>
+                <th className="p-4 text-sm font-bold uppercase tracking-wide text-center">Alt qty left</th>
                 <th className="p-4 text-sm font-bold uppercase tracking-wide text-center">Status</th>
               </tr>
             </thead>
@@ -93,16 +83,7 @@ const Dashboard = ({ isDarkMode }) => {
                   <tr key={item.id} className={`hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
-                    
-                    {/* NEW: ALTERNATE QUANTITY COLUMN */}
-                    <td className="p-4 text-center font-mono opacity-80">
-                      {item.altQuantity !== '-' ? (
-                        <span>{item.altQuantity} <span className="text-xs opacity-60">{item.altUnit}</span></span>
-                      ) : (
-                        <span className="opacity-30">-</span>
-                      )}
-                    </td>
-                    
+                    <td className="p-4 text-center font-mono opacity-80">{item.altQuantity !== '-' ? (<span>{item.altQuantity} <span className="text-xs opacity-60">{item.altUnit}</span></span>) : (<span className="opacity-30">-</span>)}</td>
                     <td className="p-4 text-center"><span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${isLow ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>{isLow ? <AlertCircle size={14} /> : <CheckCircle size={14} />}{isLow ? "Low" : "OK"}</span></td>
                   </tr>
                 );
