@@ -30,12 +30,9 @@ const Dashboard = ({ isDarkMode }) => {
       { v: "Status", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }
     ];
     const rows = processedData.map(item => {
-      // Clean Number Handling
       const altVal = Number(item.altQuantity) || 0;
-      const altText = (altVal !== 0 || item.altUnit) 
-        ? `${altVal.toFixed(2).replace(/\.00$/, '')} ${item.altUnit || ''}` 
-        : '-';
-
+      const altText = (altVal !== 0 || item.altUnit) ? `${altVal.toFixed(2).replace(/\.00$/, '')} ${item.altUnit || ''}` : '-';
+      
       return [
         { v: item.name, s: { alignment: { horizontal: "center" } } },
         { v: `${item.quantity} ${item.unit}`, s: { alignment: { horizontal: "center" } } },
@@ -84,10 +81,11 @@ const Dashboard = ({ isDarkMode }) => {
               {processedData.map((item) => {
                 const isLow = item.quantity <= item.alertQty;
                 
-                // SIMPLE DISPLAY LOGIC
+                // --- SIMPLE & ROBUST DISPLAY LOGIC ---
                 const altVal = Number(item.altQuantity) || 0;
                 let display = "-";
-                // If there's a value OR a unit is defined, show the number
+                
+                // Show Number if > 0 OR if the unit is defined (e.g. "0 box")
                 if (altVal !== 0 || (item.altUnit && item.altUnit !== '-')) {
                     display = `${altVal.toFixed(2).replace(/\.00$/, '')} <span class="text-xs opacity-60">${item.altUnit || ''}</span>`;
                 }
@@ -96,9 +94,12 @@ const Dashboard = ({ isDarkMode }) => {
                   <tr key={item.id} className={`hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
+                    
+                    {/* Render HTML safely for the small unit text */}
                     <td className="p-4 text-center font-mono opacity-80">
                       {display !== '-' ? (<span dangerouslySetInnerHTML={{ __html: display }}></span>) : (<span className="opacity-30">-</span>)}
                     </td>
+                    
                     <td className="p-4 text-center"><span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${isLow ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>{isLow ? <AlertCircle size={14} /> : <CheckCircle size={14} />}{isLow ? "Low" : "OK"}</span></td>
                   </tr>
                 );
