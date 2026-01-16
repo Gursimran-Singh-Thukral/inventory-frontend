@@ -1,19 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useInventory } from '../context/InventoryContext';
 import { Package, AlertTriangle, Search, Download, CheckCircle, AlertCircle } from 'lucide-react';
 import XLSX from 'xlsx-js-style';
 
 const Dashboard = ({ isDarkMode }) => {
-  const { inventory } = useInventory();
+  const { inventory, transactions } = useInventory();
   const [searchTerm, setSearchTerm] = useState("");
   const [sortByAlert, setSortByAlert] = useState(false);
 
-  const totalProducts = inventory.length;
-  const alertProducts = inventory.filter(i => i.quantity <= i.alertQty).length;
+  // --- CLIENT-SIDE CALCULATION ENGINE ---
+  // This forces the dashboard to match the Transaction Table exactly.
+  const dashboardData = useMemo(() => {
+    return inventory.map(item => {
+      // 1. Find all transactions for this item (Case Insensitive)
+      const itemTxns = transactions.filter(t => 
+        t.itemName.trim().toLowerCase() === item.name.trim().toLowerCase()
+      );
 
-  let processedData = inventory.filter(item => 
+      // 2. Sum up Primary Quantity
+      const livePrimary = itemTxns.reduce((acc, t) => {
+        const qty = parseFloat(t.quantity) || 0;
+        return t.type === 'IN' ? acc + qty : acc - qty;
+      }, 0);
+
+      // 3. Sum up Alternate Quantity (The Independent Calc)
+      const liveAlt = itemTxns.reduce((acc, t) => {
+        // Clean the data: "50 boxes" -> 50, "10" -> 10
+        const raw = t.altQty || 0;
+        const cleanStr = String(raw).replace(/[^0-9.-]/g, '');
+        const val = parseFloat(cleanStr) || 0;
+        
+        return t.type === 'IN' ? acc + val : acc - val;
+      }, 0);
+
+      return {
+        ...item,
+        quantity: livePrimary,
+        altQuantity: liveAlt
+      };
+    });
+  }, [inventory, transactions]);
+
+  // --- FILTERING & SORTING ---
+  let processedData = dashboardData.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const totalProducts = dashboardData.length;
+  const alertProducts = dashboardData.filter(i => i.quantity <= i.alertQty).length;
 
   if (sortByAlert) {
     processedData.sort((a, b) => (a.quantity - a.alertQty) - (b.quantity - b.alertQty));
@@ -30,7 +64,6 @@ const Dashboard = ({ isDarkMode }) => {
       { v: "Status", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }
     ];
     const rows = processedData.map(item => {
-      // Logic: Just use the number the server sent us
       const altVal = parseFloat(item.altQuantity) || 0;
       const altText = (altVal !== 0 || item.altUnit) ? `${altVal.toFixed(2).replace(/\.00$/, '')} ${item.altUnit || ''}` : '-';
       
@@ -82,12 +115,9 @@ const Dashboard = ({ isDarkMode }) => {
               {processedData.map((item) => {
                 const isLow = item.quantity <= item.alertQty;
                 
-                // --- SIMPLE DISPLAY LOGIC ---
-                // We use parseFloat to catch any remaining string numbers
-                const altVal = parseFloat(item.altQuantity) || 0;
-                
+                // --- DISPLAY LOGIC ---
+                const altVal = item.altQuantity; // Already calculated locally
                 let display = "-";
-                // Show Number if > 0 OR if the unit is defined
                 if (altVal !== 0 || (item.altUnit && item.altUnit !== '-')) {
                     display = `${altVal.toFixed(2).replace(/\.00$/, '')} <span class="text-xs opacity-60">${item.altUnit || ''}</span>`;
                 }
@@ -98,7 +128,7 @@ const Dashboard = ({ isDarkMode }) => {
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
                     
                     <td className="p-4 text-center font-mono opacity-80">
-                      {display !== '-' ? (<span dangerouslySetInnerHTML={{ __html: display }}></span>) : (<span className="opacity-30">{altVal}</span>)}
+                      {display !== '-' ? (<span dangerouslySetInnerHTML={{ __html: display }}></span>) : (<span className="opacity-30">-</span>)}
                     </td>
                     
                     <td className="p-4 text-center"><span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider ${isLow ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"}`}>{isLow ? <AlertCircle size={14} /> : <CheckCircle size={14} />}{isLow ? "Low" : "OK"}</span></td>
