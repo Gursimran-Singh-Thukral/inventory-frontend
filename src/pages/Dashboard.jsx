@@ -35,12 +35,12 @@ const Dashboard = ({ isDarkMode }) => {
       { v: "Status", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "2563EB" } }, alignment: { horizontal: "center" } } }
     ];
     const rows = processedData.map(item => {
+      // Formatting Logic
       let altVal = parseFloat(item.altQuantity);
-      if (isNaN(altVal)) altVal = 0; // Safety Check
+      if (isNaN(altVal)) altVal = 0;
       
-      const altText = (altVal !== 0 || item.altUnit) 
-        ? `${altVal.toFixed(2).replace(/\.00$/, '')} ${item.altUnit || ''}` 
-        : '-';
+      // If user has set an Alt Unit (e.g. "box"), ALWAYS show the number, even if 0.
+      const altText = item.altUnit ? `${altVal.toFixed(2).replace(/\.00$/, '')} ${item.altUnit}` : '-';
 
       return [
         { v: item.name, s: { alignment: { horizontal: "center" } } },
@@ -88,24 +88,33 @@ const Dashboard = ({ isDarkMode }) => {
               {processedData.map((item) => {
                 const isLow = item.quantity <= item.alertQty;
                 
-                // --- FIXED DISPLAY LOGIC (NaN-Proof) ---
+                // --- ROBUST DISPLAY LOGIC ---
+                // 1. Get value (default to 0)
                 let altVal = parseFloat(item.altQuantity);
-                if (isNaN(altVal)) altVal = 0; // Force 0 if corrupted
+                if (isNaN(altVal)) altVal = 0;
 
-                const formattedAlt = altVal.toFixed(2).replace(/\.00$/, ''); // "50.00" -> "50"
-                
-                // Show Dash ONLY if value is 0 AND there is no unit defined
-                const showAlt = altVal !== 0 || (item.altUnit && item.altUnit !== '-');
+                // 2. Format
+                const formattedAlt = altVal.toFixed(2).replace(/\.00$/, ''); 
+
+                // 3. Logic: If Alt Unit exists, show "50 box" or "0 box". 
+                //    If NO Alt Unit exists, but value > 0, show "50". 
+                //    Only show "-" if value is 0 AND no unit.
+                let display = "-";
+                if (item.altUnit) {
+                    display = `${formattedAlt} <span class="text-xs opacity-60">${item.altUnit}</span>`;
+                } else if (altVal !== 0) {
+                    display = formattedAlt;
+                }
 
                 return (
                   <tr key={item.id} className={`hover:bg-opacity-50 transition-colors ${isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-50'}`}>
                     <td className="p-4 font-medium">{item.name}<span className="text-xs opacity-50 ml-1 font-normal">({item.unit})</span></td>
                     <td className="p-4 text-center font-bold font-mono text-lg">{item.quantity}</td>
                     
-                    {/* Alt Qty Column */}
+                    {/* Render HTML safely for the small unit text */}
                     <td className="p-4 text-center font-mono opacity-80">
-                      {showAlt ? (
-                        <span>{formattedAlt} <span className="text-xs opacity-60">{item.altUnit}</span></span>
+                      {display !== '-' ? (
+                        <span dangerouslySetInnerHTML={{ __html: display }}></span>
                       ) : (
                         <span className="opacity-30">-</span>
                       )}
